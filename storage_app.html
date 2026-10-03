@@ -162,8 +162,10 @@ table{border-collapse:collapse;width:100%}
 .hb .zero{position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--line)}
 .hb .val{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--muted)}
 .hb .val b{color:var(--ink)}
+.hbars.wide .hb{grid-template-columns:minmax(180px,300px) minmax(0,1fr) 110px}
+.hbars.wide .hb .lab{white-space:normal;overflow:visible;line-height:1.3}
 .dash-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-@media (max-width:860px){.dash-grid{grid-template-columns:minmax(0,1fr)}.hb{grid-template-columns:110px minmax(0,1fr) 92px}}
+@media (max-width:860px){.dash-grid{grid-template-columns:minmax(0,1fr)}.hb{grid-template-columns:110px minmax(0,1fr) 92px}.hbars.wide .hb{grid-template-columns:minmax(0,1fr) 110px;row-gap:3px}.hbars.wide .hb .lab{grid-column:1/-1}}
 .dash-grid .panel{padding:14px 16px;min-width:0}
 .dash-grid h3{font-size:15px;margin-bottom:2px}
 .linkbtn{background:none;border:0;padding:0;color:var(--rf);cursor:pointer;text-decoration:underline;font:inherit;text-align:left}
@@ -964,7 +966,7 @@ function renderDash(){
   out.innerHTML=`<div class="areas">${tiles}</div>
     <div class="dash-grid" style="margin-top:16px">
       <div class="panel"><h3>ค่า Storage ต่อเที่ยวเรือ</h3><p class="total-note" style="margin:0 0 10px">THB · ETD ล่าสุดอยู่บนสุด · ชี้ที่แถวเพื่อดูรายละเอียด</p><div class="hbars">${vbars}</div></div>
-      <div class="panel"><h3>Shipper ที่มีค่า Storage สูงสุด</h3><p class="total-note" style="margin:0 0 10px">10 อันดับแรก · THB · จำนวนตู้ที่เสียค่า</p><div class="hbars">${sbars}</div></div>
+      <div class="panel"><h3>Shipper ที่มีค่า Storage สูงสุด</h3><p class="total-note" style="margin:0 0 10px">10 อันดับแรก · THB · จำนวนตู้ที่เสียค่า</p><div class="hbars wide">${sbars}</div></div>
     </div>
     <div class="section-h"><h2>เที่ยวเรือ (${vs.length})</h2><span class="total-note">คลิกชื่อเที่ยวเพื่อดูรายตู้</span></div>
     <div class="scroll"><table class="grid"><thead><tr><th>ETD_SVC_VSL_VOY_POL_LWharf</th><th>ETD</th><th>พื้นที่</th><th>Terminal</th><th class="r">ตู้</th><th class="r">เกิน F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th><th class="r">เก็บลูกค้า</th><th class="r">HAL จ่าย</th><th></th></tr></thead>

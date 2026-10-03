@@ -630,6 +630,8 @@ h2{font-size:15px;margin:26px 0 4px}
 .hb .ftm{position:absolute;top:-3px;bottom:-3px;width:0;border-left:2px dashed var(--ink);opacity:.55}
 .hb .val{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
 .hb .val b{color:var(--ink)}
+.hbars.wide .hb{grid-template-columns:minmax(200px,340px) minmax(0,1fr) 130px}
+.hbars.wide .hb .lab{white-space:normal;overflow:visible;line-height:1.3}
 .cols{display:flex;align-items:flex-end;gap:6px;height:170px;padding-top:18px;border-bottom:1px solid var(--line)}
 .col{flex:1;min-width:20px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;position:relative}
 .col .b{width:70%;max-width:44px;background:var(--rf);border-radius:4px 4px 0 0}
@@ -649,7 +651,7 @@ tfoot td{background:var(--sunken);font-weight:bold;border-top:1px solid var(--li
 .warns{background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:10px 14px;margin-top:14px;display:grid;gap:2px;font-size:12.5px}
 a{color:var(--rf)}
 .two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-@media (max-width:820px){.two{grid-template-columns:minmax(0,1fr)}.hb{grid-template-columns:96px minmax(0,1fr) 92px}}
+@media (max-width:820px){.two{grid-template-columns:minmax(0,1fr)}.hb{grid-template-columns:96px minmax(0,1fr) 92px}.hbars.wide .hb{grid-template-columns:minmax(0,1fr) 110px;row-gap:3px}.hbars.wide .hb .lab{grid-column:1/-1}}
 footer{color:var(--muted);font-size:12px;margin-top:24px}
 """
 
@@ -808,7 +810,7 @@ def master_dashboard(voyages):
     shp_html = ""
     if top:
         smx = top[0][1][0]
-        shp_html = (f'<h2>Shipper ที่มีค่า Storage สูงสุด</h2><p class="sub">10 อันดับแรก · THB</p><div class="panel"><div class="hbars">'
+        shp_html = (f'<h2>Shipper ที่มีค่า Storage สูงสุด</h2><p class="sub">10 อันดับแรก · THB</p><div class="panel"><div class="hbars wide">'
                     + "".join(f'<div class="hb" title="{e(k)}: {v[1]} ตู้ · {money(v[0])} บาท"><span class="lab" style="font-family:inherit">{e(k)}</span>'
                               f'<span class="track"><span class="seg bar" style="left:0;width:{v[0] / smx * 100:.2f}%"></span></span>'
                               f'<span class="val"><b>{money(v[0])}</b> · {v[1]} ตู้</span></div>' for k, v in top)
