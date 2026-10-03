@@ -63,6 +63,12 @@ Free time terminal (ลำดับการเลือก)
 
 อัตราอยู่ที่ `TIERS` ใน `storage_calc.py` และ `storage_app.html` (ต้องแก้ทั้งสองที่ให้ตรงกัน)
 
-## ข้อมูลลูกค้า
+## ไฟล์ข้อมูลใน repo
 
-`.gitignore` อนุญาตเฉพาะไฟล์โปรแกรม ไฟล์ .xls / .xlsx และโฟลเดอร์ผลลัพธ์จะไม่ถูกเก็บเข้า git
+| ไฟล์ / โฟลเดอร์ | คืออะไร |
+|---|---|
+| `TEMPLATE.XLSX` | แม่แบบ Excel เดิม (ชีท 1.Loading, 2.Bookinglist, 3.GateMove, CS, Charge) |
+| `messageImage_*.jpg` | ตาราง Tariff ต้นฉบับ |
+| `archive/*.xlsx` | ไฟล์เที่ยวเรือตัวอย่างแบบ TEMPLATE (UTCT, BKK, LCH) ใช้ตรวจผลเทียบ Excel |
+| `archive/backup_*` | ผลคำนวณเก่าที่ย้ายออกตอนล้างข้อมูล |
+| `INPUT/`, `VOYAGES/`, `DATABASE/`, `DASHBOARD.html` | โฟลเดอร์ทำงาน (โปรแกรมสร้างให้เองถ้าไม่มี) |

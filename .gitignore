@@ -1,8 +1,4 @@
-# เก็บเฉพาะโปรแกรม — ไม่เก็บข้อมูลลูกค้า/ผลลัพธ์ (.xls, .xlsx, INPUT, VOYAGES, DATABASE, archive)
-/*
-!/.gitignore
-!/README.md
-!/requirements.txt
-!/storage_calc.py
-!/storage_app.html
-!/run_storage.bat
+# ไฟล์ชั่วคราวเท่านั้น (ข้อมูลทั้งหมดเก็บใน repo ตามที่ตกลง)
+__pycache__/
+~$*
+*.tmp

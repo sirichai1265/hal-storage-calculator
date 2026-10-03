@@ -1,0 +1,68 @@
+<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HAL Storage Dashboard</title><style>
+:root{--bg:#EEF1F3;--surface:#FFFFFF;--sunken:#F5F7F8;--ink:#15222B;--muted:#5A6873;--line:#D5DCE1;
+--head:#1F3A4D;--head-ink:#EAF1F5;--head-muted:#A3B6C3;--accent:#D8812A;--accent-ink:#8F4E0E;--free:#B9C8D3;
+--good:#2E7A4E;--warn:#B4231A;--warn-soft:#FBE4E1;--rf:#1F6FA8;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0F161B;--surface:#172229;--sunken:#121B21;
+--ink:#E3EAEE;--muted:#93A3AE;--line:#2A3943;--head:#0B1318;--head-ink:#E3EAEE;--head-muted:#7F95A3;--accent:#E99B4C;
+--accent-ink:#F2B57A;--free:#3B4F5D;--good:#5CC48A;--warn:#F07B70;--warn-soft:#3A1C19;--rf:#6DB4E8;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0F161B;--surface:#172229;--sunken:#121B21;--ink:#E3EAEE;--muted:#93A3AE;--line:#2A3943;
+--head:#0B1318;--head-ink:#E3EAEE;--head-muted:#7F95A3;--accent:#E99B4C;--accent-ink:#F2B57A;--free:#3B4F5D;
+--good:#5CC48A;--warn:#F07B70;--warn-soft:#3A1C19;--rf:#6DB4E8;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.5 Tahoma,"Segoe UI",sans-serif}
+.num{font-variant-numeric:tabular-nums}
+header{background:var(--head);color:var(--head-ink);padding:18px 16px 16px}
+.wrap{max-width:1180px;margin:0 auto}
+header h1{margin:0;font-size:20px;letter-spacing:.01em}
+header h1 b{color:var(--accent)}
+header p{margin:4px 0 0;color:var(--head-muted)}
+.meta{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:12px}
+.meta div{display:grid}.meta span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--head-muted)}
+.meta strong{font-size:14px}
+main{padding:20px 16px 40px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:2px}
+.kpi span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.kpi strong{font-size:22px;font-variant-numeric:tabular-nums}
+.kpi.hl{background:var(--head);border-color:var(--head);color:var(--head-ink)}.kpi.hl span{color:var(--head-muted)}
+.kpi small{color:var(--muted);font-size:11.5px}.kpi.hl small{color:var(--head-muted)}
+h2{font-size:15px;margin:26px 0 4px}
+.sub{color:var(--muted);margin:0 0 10px;font-size:12.5px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:10px}
+.legend i{display:inline-block;width:12px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.hbars{display:grid;gap:4px}
+.hb{display:grid;grid-template-columns:minmax(96px,150px) minmax(0,1fr) 120px;gap:10px;align-items:center;font-size:12px;padding:1px 4px;border-radius:4px}
+.hb:hover{background:var(--sunken)}
+.hb .lab{font-family:Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hb .track{position:relative;height:12px}
+.hb .seg{position:absolute;top:0;bottom:0;border-radius:0}
+.hb .seg.free{background:var(--free);border-radius:3px 0 0 3px}
+.hb .seg.over{background:var(--accent);border-radius:0 3px 3px 0}
+.hb .seg.free.only{border-radius:3px}
+.hb .seg.bar{background:var(--accent);border-radius:0 3px 3px 0}
+.hb .ftm{position:absolute;top:-3px;bottom:-3px;width:0;border-left:2px dashed var(--ink);opacity:.55}
+.hb .val{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.hb .val b{color:var(--ink)}
+.cols{display:flex;align-items:flex-end;gap:6px;height:170px;padding-top:18px;border-bottom:1px solid var(--line)}
+.col{flex:1;min-width:20px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;position:relative}
+.col .b{width:70%;max-width:44px;background:var(--rf);border-radius:4px 4px 0 0}
+.col .b.etd{background:var(--accent)}
+.col .c{font-size:11.5px;font-variant-numeric:tabular-nums;margin-bottom:3px}
+.colx{display:flex;gap:6px}.colx div{flex:1;min-width:20px;text-align:center;font-size:11px;color:var(--muted);padding-top:4px}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:8px 10px;background:var(--sunken);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right}td.r{font-variant-numeric:tabular-nums}
+tr.paid td.amt{color:var(--accent-ink);font-weight:bold}
+tfoot td{background:var(--sunken);font-weight:bold;border-top:1px solid var(--line)}
+.chip{display:inline-block;font-size:11px;font-weight:bold;padding:0 7px;border-radius:999px}
+.chip.dg{background:var(--warn-soft);color:var(--warn)}.chip.rf{color:var(--rf);border:1px solid var(--rf)}
+.warns{background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:10px 14px;margin-top:14px;display:grid;gap:2px;font-size:12.5px}
+a{color:var(--rf)}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:820px){.two{grid-template-columns:minmax(0,1fr)}.hb{grid-template-columns:96px minmax(0,1fr) 92px}}
+footer{color:var(--muted);font-size:12px;margin-top:24px}
+</style></head><body><header><div class="wrap"><h1>HAL <b>Storage</b> Dashboard</h1><p>รวมทุกเที่ยวเรือที่คำนวณแล้ว · 1 เที่ยว</p></div></header><main><div class="wrap"><div class="kpis"><div class="kpi"><span>BKK</span><strong>0</strong><small>0 ตู้ · เกิน F/T 0 ตู้</small></div><div class="kpi"><span>UTCT</span><strong>0</strong><small>0 ตู้ · เกิน F/T 0 ตู้</small></div><div class="kpi"><span>LCH</span><strong>0</strong><small>35 ตู้ · เกิน F/T 0 ตู้</small></div><div class="kpi"><span>เก็บลูกค้า</span><strong>0</strong><small>THB</small></div><div class="kpi hl"><span>รวม HAL จ่าย</span><strong>0</strong><small>35 ตู้ · 1 เที่ยว</small></div></div><p class="sub" style="margin-top:14px">ฐานข้อมูล Excel: <a href="DATABASE/STORAGE_DATABASE.xlsx">DATABASE/STORAGE_DATABASE.xlsx</a></p><h2>ค่า Storage ต่อเที่ยวเรือ</h2><p class="sub">THB · เรียงตาม ETD ล่าสุดก่อน</p><div class="panel"><div class="hbars"><div class="hb" title="2026-09-28_ANX_KMSU_2607S_THLCH_LCH04: 0 บาท"><span class="lab">28/09 KMSU 2607S</span><span class="track"><span class="seg bar" style="left:0;width:0.00%;border-radius:0 3px 3px 0"></span></span><span class="val"><b>0</b> ฿</span></div></div></div><h2>เที่ยวเรือทั้งหมด</h2><div class="scroll"><table><thead><tr><th>ETD_SVC_VSL_VOY_POL_LWharf</th><th>ETD</th><th>Area</th><th>Terminal</th><th class="r">ตู้</th><th class="r">เกิน F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th><th class="r">เก็บลูกค้า</th><th class="r">HAL จ่าย</th></tr></thead><tbody><tr class=""><td><a href="VOYAGES/2026-09-28_ANX_KMSU_2607S_THLCH_LCH04/2026-09-28_ANX_KMSU_2607S_THLCH_LCH04_DASHBOARD.html">2026-09-28_ANX_KMSU_2607S_THLCH_LCH04</a></td><td>28/09/2026</td><td>LCH</td><td>LCMT A0/B1</td><td class="r">35</td><td class="r">0</td><td class="r">0</td><td class="r amt">0</td><td class="r">0</td><td class="r">0</td></tr></tbody><tfoot><tr><td colspan="4">รวม</td><td class="r">35</td><td class="r">0</td><td class="r">0</td><td class="r">0</td><td class="r">0</td><td class="r">0</td></tr></tfoot></table></div><footer>สร้างโดย storage_calc.py · 03/10/2026 10:25</footer></div></main></body></html>
