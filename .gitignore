@@ -1,0 +1,8 @@
+# เก็บเฉพาะโปรแกรม — ไม่เก็บข้อมูลลูกค้า/ผลลัพธ์ (.xls, .xlsx, INPUT, VOYAGES, DATABASE, archive)
+/*
+!/.gitignore
+!/README.md
+!/requirements.txt
+!/storage_calc.py
+!/storage_app.html
+!/run_storage.bat

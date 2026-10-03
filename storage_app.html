@@ -1,0 +1,1031 @@
+<title>HAL Storage Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<style>
+/* Layout: steel-blue control-room bar with tabs; quick calculator = form column + result column; file mode = area tiles over a dense yard-list table. */
+:root{
+  --bg:#EDF0F2; --surface:#FFFFFF; --sunken:#F5F7F8; --ink:#15222B; --muted:#5A6873; --line:#D2D9DE;
+  --head:#1D3646; --head-ink:#EAF1F5; --head-muted:#9FB4C2;
+  --accent:#D8812A; --accent-soft:#FBEBD9; --accent-ink:#8F4E0E;
+  --good:#2E7A4E; --good-soft:#E1F1E7; --warn:#B4231A; --warn-soft:#FBE4E1; --dg:#B4231A; --rf:#1F6FA8; --rf-soft:#E0EEF8;
+  --f-display:"Bai Jamjuree","IBM Plex Sans Thai",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F161B; --surface:#172229; --sunken:#121B21; --ink:#E3EAEE; --muted:#93A3AE; --line:#2A3943;
+  --head:#0B1318; --head-ink:#E3EAEE; --head-muted:#7F95A3;
+  --accent:#E99B4C; --accent-soft:#3A2915; --accent-ink:#F2B57A;
+  --good:#5CC48A; --good-soft:#16301F; --warn:#F07B70; --warn-soft:#3A1C19; --dg:#F07B70; --rf:#6DB4E8; --rf-soft:#15293A;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F161B; --surface:#172229; --sunken:#121B21; --ink:#E3EAEE; --muted:#93A3AE; --line:#2A3943;
+  --head:#0B1318; --head-ink:#E3EAEE; --head-muted:#7F95A3;
+  --accent:#E99B4C; --accent-soft:#3A2915; --accent-ink:#F2B57A;
+  --good:#5CC48A; --good-soft:#16301F; --warn:#F07B70; --warn-soft:#3A1C19; --dg:#F07B70; --rf:#6DB4E8; --rf-soft:#15293A;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
+.num,.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header{background:var(--head);color:var(--head-ink);padding-inline:16px}
+.head-in{max-width:1180px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-top:18px}
+.brand{display:flex;flex-direction:column;gap:2px;padding-bottom:14px}
+.brand h1{font-size:22px;font-weight:700;letter-spacing:.01em}
+.brand h1 b{color:var(--accent)}
+.brand p{margin:0;color:var(--head-muted);font-size:13px}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{background:none;border:0;border-bottom:3px solid transparent;color:var(--head-muted);padding:10px 14px 11px;cursor:pointer;font-weight:500}
+nav button:hover{color:var(--head-ink)}
+nav button[aria-selected="true"]{color:var(--head-ink);border-bottom-color:var(--accent)}
+
+main{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:24px 48px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.label{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+
+/* quick calc */
+.qc{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:820px){.qc{grid-template-columns:minmax(0,1fr)}}
+form.panel{padding:18px;display:grid;gap:14px}
+.field{display:grid;gap:5px}
+.field label{font-size:13px;font-weight:500}
+.field small{color:var(--muted);font-size:12px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+input[type=date],input[type=number],input[type=search],select{width:100%;background:var(--sunken);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-height:38px}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--sunken)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{flex:1;text-align:center;padding:7px 4px;cursor:pointer;font-size:13px;border-left:1px solid var(--line)}
+.seg label:first-of-type{border-left:0}
+.seg input:checked+label{background:var(--head);color:var(--head-ink);font-weight:600}
+.seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:-2px}
+.divider{border:0;border-top:1px dashed var(--line);margin:2px 0}
+
+.result{display:grid;gap:16px;min-width:0}
+.ticket{padding:20px;display:grid;gap:16px}
+.ticket-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--sunken);border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.chip.dg{background:var(--warn-soft);color:var(--dg);border-color:transparent}
+.chip.rf{background:var(--rf-soft);color:var(--rf);border-color:transparent}
+.chip.acc{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent}
+.chip.ok{background:var(--good-soft);color:var(--good);border-color:transparent}
+.big{font-family:var(--f-mono);font-size:40px;font-weight:600;line-height:1.05;font-variant-numeric:tabular-nums}
+.big small{font-size:15px;color:var(--muted);font-weight:500;margin-left:6px}
+.total-note{color:var(--muted);font-size:13px}
+.timeline{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+@media (max-width:520px){.timeline{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.timeline div{background:var(--sunken);padding:10px 12px;display:grid;gap:2px}
+.timeline .v{font-family:var(--f-mono);font-size:20px;font-weight:600}
+.timeline .v.hot{color:var(--accent-ink)}
+table{border-collapse:collapse;width:100%}
+.brk td{padding:7px 0;border-bottom:1px solid var(--line)}
+.brk td:last-child{text-align:right}
+.brk tr:last-child td{border-bottom:0}
+.brk .diff td{color:var(--muted);font-size:12.5px}
+.cust{padding:16px 20px;display:grid;gap:10px}
+.cust-grid{display:flex;flex-wrap:wrap;gap:8px 28px}
+.cust-grid div{display:grid}
+.cust-grid .v{font-family:var(--f-mono);font-size:18px;font-weight:600}
+
+.strip{padding:16px 20px;display:grid;gap:10px}
+.strip-head{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;align-items:baseline}
+.bars{display:grid;gap:3px}
+.bar{display:grid;grid-template-columns:118px minmax(0,1fr) 80px;gap:10px;align-items:center;font-size:12.5px;padding:1px 4px;border-radius:4px}
+.bar .d{font-family:var(--f-mono);color:var(--muted);white-space:nowrap}
+.bar .track{height:12px;background:var(--sunken);border-radius:3px;position:relative;overflow:hidden}
+.bar .fill{position:absolute;inset:0 auto 0 0;background:var(--line);border-radius:3px}
+.bar.free .fill{background:var(--good-soft)}
+.bar.paid .fill{background:var(--accent)}
+.bar .a{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+.bar.sel{background:var(--accent-soft)}
+.bar.sel .d,.bar.sel .a{color:var(--accent-ink);font-weight:600}
+
+/* file mode */
+.drop{border:2px dashed var(--line);border-radius:var(--r);padding:26px 20px;text-align:center;display:grid;gap:8px;justify-items:center;background:var(--surface);cursor:pointer;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop strong{font-family:var(--f-display);font-size:17px}
+.drop p{margin:0;color:var(--muted);font-size:13px;max-width:60ch}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:500;min-height:36px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--head);color:var(--head-ink);border-color:var(--head)}
+.files{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px}
+.areas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:18px}
+@media (max-width:860px){.areas{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:420px){.areas{grid-template-columns:minmax(0,1fr)}}
+.area{padding:14px 16px;display:grid;gap:6px;border-top:4px solid var(--line)}
+.area.has{border-top-color:var(--accent)}
+.area.grand{background:var(--head);color:var(--head-ink);border-color:var(--head)}
+.area.grand .label,.area.grand .sub{color:var(--head-muted)}
+.area .amt{font-family:var(--f-mono);font-size:24px;font-weight:600}
+.area .sub{color:var(--muted);font-size:12.5px}
+.section-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin:26px 0 10px}
+.section-h h2{font-size:18px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tools input[type=search]{width:220px;min-height:36px}
+.filt{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.filt button{border:0;border-left:1px solid var(--line);background:var(--surface);padding:6px 11px;cursor:pointer;min-height:34px}
+.filt button:first-child{border-left:0}
+.filt button[aria-pressed="true"]{background:var(--head);color:var(--head-ink)}
+.check{display:inline-flex;gap:6px;align-items:center;font-size:13px;cursor:pointer}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.grid th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);background:var(--sunken);white-space:nowrap;position:sticky;top:0}
+.grid td{padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+.grid tr:last-child td{border-bottom:0}
+.grid .r{text-align:right}
+.grid td.shp{max-width:240px;overflow:hidden;text-overflow:ellipsis}
+.grid tr.paid td.amt{color:var(--accent-ink);font-weight:600}
+.grid tfoot td{background:var(--sunken);font-weight:600;border-top:1px solid var(--line)}
+.ftin{width:58px;min-height:30px;padding:3px 6px;text-align:right;background:var(--sunken);border:1px solid var(--line);border-radius:4px;font-family:var(--f-mono)}
+.ftin.set{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
+.slots{display:flex;flex-wrap:wrap;gap:8px;width:100%}
+.slot{display:inline-flex;gap:6px;align-items:center;padding:5px 10px;border-radius:6px;border:1px dashed var(--line);color:var(--muted);font-weight:600;font-size:13px}
+.slot span{font-weight:400}
+.slot.on{border-style:solid;border-color:var(--good);color:var(--good);background:var(--good-soft)}
+.chip .x{border:0;background:none;color:inherit;cursor:pointer;padding:0 0 0 4px;font-size:15px;line-height:1}
+.dash-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
+.dash-top select{width:auto;min-height:36px}
+.dash-top .spacer{flex:1}
+.dash-empty{padding:24px;display:grid;gap:6px;text-align:center;justify-items:center}
+.dash-empty p{margin:0;color:var(--muted);max-width:60ch}
+.hbars{display:grid;gap:4px}
+.hb{display:grid;grid-template-columns:minmax(110px,190px) minmax(0,1fr) 110px;gap:10px;align-items:center;font-size:12.5px;padding:2px 4px;border-radius:4px}
+.hb:hover{background:var(--sunken)}
+.hb .lab{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hb .track{position:relative;height:12px}
+.hb .fillbar{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:0 3px 3px 0}
+.hb .zero{position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--line)}
+.hb .val{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.hb .val b{color:var(--ink)}
+.dash-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:860px){.dash-grid{grid-template-columns:minmax(0,1fr)}.hb{grid-template-columns:110px minmax(0,1fr) 92px}}
+.dash-grid .panel{padding:14px 16px;min-width:0}
+.dash-grid h3{font-size:15px;margin-bottom:2px}
+.linkbtn{background:none;border:0;padding:0;color:var(--rf);cursor:pointer;text-decoration:underline;font:inherit;text-align:left}
+.btn.sm{min-height:28px;padding:3px 9px;font-size:12.5px}
+.btn.danger{color:var(--warn);border-color:var(--warn)}
+tr.detail>td{background:var(--sunken);padding:10px}
+tr.detail .scroll{max-height:420px;overflow:auto}
+.warns{margin-top:14px;padding:12px 16px;background:var(--warn-soft);color:var(--warn);border-radius:var(--r);font-size:13px;display:grid;gap:3px}
+.empty{color:var(--muted);text-align:center;padding:24px}
+.copybox{width:100%;height:120px;margin-top:8px;font-family:var(--f-mono);font-size:12px;background:var(--sunken);border:1px solid var(--line);border-radius:6px;padding:8px}
+
+/* tariff */
+.tariff{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:820px){.tariff{grid-template-columns:minmax(0,1fr)}}
+.tcard{padding:16px 18px;display:grid;gap:10px;min-width:0}
+.tcard h3{font-size:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tcard p{margin:0;color:var(--muted);font-size:13px}
+.tt th,.tt td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.tt th:first-child,.tt td:first-child{text-align:left}
+.tt th{font-size:11.5px;color:var(--muted);font-weight:600}
+.notes{margin-top:16px;padding:16px 18px;display:grid;gap:6px;font-size:13.5px}
+.notes ul{margin:0;padding-left:18px;display:grid;gap:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header>
+  <div class="head-in">
+    <div class="brand">
+      <h1>HAL <b>Storage</b> Calculator</h1>
+      <p>ประเมินค่าฝากตู้ที่ terminal · BKK · UTCT · LCH</p>
+    </div>
+    <nav role="tablist" aria-label="โหมด">
+      <button role="tab" id="tab-quick" aria-selected="true" data-tab="quick">คำนวณด่วน</button>
+      <button role="tab" id="tab-file" aria-selected="false" data-tab="file">คำนวณจากไฟล์เรือ</button>
+      <button role="tab" id="tab-dash" aria-selected="false" data-tab="dash">Dashboard</button>
+      <button role="tab" id="tab-tariff" aria-selected="false" data-tab="tariff">Tariff</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+<!-- ============ QUICK ============ -->
+<section id="view-quick" class="qc">
+  <form class="panel" id="qform" autocomplete="off">
+    <div class="field">
+      <label for="q-loc">Terminal (Location)</label>
+      <select id="q-loc"></select>
+    </div>
+    <div class="field">
+      <span class="label" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink);font-weight:500">ขนาดตู้</span>
+      <div class="seg" role="radiogroup" aria-label="ขนาดตู้">
+        <input type="radio" name="size" id="q-s20" value="20'" checked><label for="q-s20">20'</label>
+        <input type="radio" name="size" id="q-s40" value="40'"><label for="q-s40">40' / 45'</label>
+      </div>
+    </div>
+    <div class="field">
+      <span class="label" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink);font-weight:500">ประเภทสินค้า</span>
+      <div class="seg" role="radiogroup" aria-label="ประเภทสินค้า">
+        <input type="radio" name="cargo" id="q-gp" value="GP" checked><label for="q-gp">GP</label>
+        <input type="radio" name="cargo" id="q-rf" value="RF"><label for="q-rf">RF</label>
+        <input type="radio" name="cargo" id="q-dg" value="DG"><label for="q-dg">DG</label>
+      </div>
+    </div>
+    <div class="field">
+      <label for="q-cgo">CGO TERM</label>
+      <select id="q-cgo"><option value="CY/CY">CY/CY</option><option value="CFS/CY">CFS/CY</option></select>
+      <small>BKK01 / BKK04 (PAT) + CFS/CY = free time 0 วัน</small>
+    </div>
+    <div class="row2">
+      <div class="field"><label for="q-in">วันตู้เข้า (Gate in)</label><input type="date" id="q-in"></div>
+      <div class="field"><label for="q-etd">ETD เรือ</label><input type="date" id="q-etd"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label for="q-qty">จำนวนตู้</label><input type="number" id="q-qty" min="1" step="1" value="1" inputmode="numeric"></div>
+      <div class="field"><label for="q-sft">Special F/T (TML)</label><input type="number" id="q-sft" min="0" step="1" placeholder="ไม่มี" inputmode="numeric"></div>
+    </div>
+    <hr class="divider">
+    <div class="row2">
+      <div class="field"><label for="q-svc">Service</label>
+        <select id="q-svc"><option value="">อื่น ๆ</option><option value="KTS">KTS</option><option value="KHS">KHS</option></select>
+      </div>
+      <div class="field"><label for="q-allow">วันแรกที่ให้คืนตู้</label><input type="date" id="q-allow"></div>
+    </div>
+    <small style="color:var(--muted);font-size:12px">Service และวันแรกที่ให้คืนตู้ใช้คำนวณฝั่งลูกค้า (ไม่บังคับ)</small>
+  </form>
+
+  <div class="result">
+    <article class="panel ticket" aria-live="polite">
+      <div class="ticket-top">
+        <div style="display:grid;gap:6px">
+          <span class="label">ค่า Storage Terminal (HAL จ่าย)</span>
+          <div class="big" id="r-total">0<small>THB</small></div>
+          <span class="total-note" id="r-note"></span>
+        </div>
+        <div class="chips" id="r-chips"></div>
+      </div>
+      <div class="timeline">
+        <div><span class="label">อยู่ใน terminal</span><span class="v" id="r-stay">–</span></div>
+        <div><span class="label">Free time</span><span class="v" id="r-ft">–</span></div>
+        <div><span class="label">วันคิดเงิน</span><span class="v hot" id="r-days">–</span></div>
+        <div><span class="label">ฟรีถึงวันที่</span><span class="v" id="r-freeuntil" style="font-size:16px">–</span></div>
+      </div>
+      <table class="brk"><tbody id="r-brk"></tbody></table>
+    </article>
+
+    <article class="panel cust">
+      <span class="label">ฝั่งลูกค้า</span>
+      <div class="cust-grid">
+        <div><span class="total-note">Free time ลูกค้า</span><span class="v" id="c-ft">–</span></div>
+        <div><span class="total-note">คืนตู้ก่อนวันที่ให้คืน</span><span class="v" id="c-early">–</span></div>
+        <div><span class="total-note">ค่าที่เก็บลูกค้าได้</span><span class="v" id="c-amt">–</span></div>
+      </div>
+      <span class="total-note" id="c-note"></span>
+    </article>
+
+    <article class="panel strip">
+      <div class="strip-head">
+        <h3 style="font-size:15px">ถ้าตู้เข้าวันอื่น จะเสียเท่าไร</h3>
+        <span class="total-note">ต่อ 1 ตู้ · ETD <span class="mono" id="s-etd"></span></span>
+      </div>
+      <div class="bars" id="s-bars"></div>
+    </article>
+  </div>
+</section>
+
+<!-- ============ FILE ============ -->
+<section id="view-file" hidden>
+  <label class="drop" id="drop" for="f-input">
+    <strong>วางไฟล์ของเที่ยวเรือที่นี่ หรือคลิกเพื่อเลือก</strong>
+    <p>ใส่ไฟล์จากระบบครบ 3 ไฟล์ (LOAD, BKG, GATE) เช่น 9-29-SWAL-2608N-LCH-LOAD.xls เลือกพร้อมกันได้ ไม่ต้องเรียงลำดับ ใส่ไฟล์ TEMPLATE ที่กรอกแล้วก็ได้ · ไฟล์ถูกอ่านในเครื่องนี้เท่านั้น ไม่ถูกอัปโหลดไปที่ไหน</p>
+    <input type="file" id="f-input" accept=".xls,.xlsx,.xlsm" multiple hidden>
+  </label>
+  <div class="files" id="f-list"></div>
+  <div id="f-warn"></div>
+  <div id="f-out"></div>
+</section>
+
+<!-- ============ TARIFF ============ -->
+<section id="view-dash" hidden>
+  <div class="dash-top">
+    <div class="filt" role="group" aria-label="กรองพื้นที่" id="d-area"></div>
+    <select id="d-month" aria-label="เดือนของ ETD"></select>
+    <span class="total-note" id="d-status" aria-live="polite"></span>
+    <span class="spacer"></span>
+    <label class="btn" for="d-import" id="d-import-lbl">นำเข้า STORAGE_DATABASE.xlsx</label>
+    <input type="file" id="d-import" accept=".xlsx" hidden>
+  </div>
+  <div id="d-out"><div class="panel dash-empty"><strong>กำลังโหลดฐานข้อมูล…</strong><p>Dashboard แสดงทุกเที่ยวเรือที่บันทึกไว้ · เพิ่มเที่ยวเรือได้จากแท็บ "คำนวณจากไฟล์เรือ" โดยกด "บันทึกเข้า Dashboard"</p></div></div>
+</section>
+
+<section id="view-tariff" hidden>
+  <div class="tariff" id="t-cards"></div>
+  <div class="panel notes">
+    <strong>หลักการคำนวณ (ตามชีท CS)</strong>
+    <ul>
+      <li>วันอยู่ใน terminal = ETD − วันตู้เข้า + 1</li>
+      <li>Free time terminal: DG 1 วัน · LCH ทุก terminal = 7 วัน · BKK02 = 5 วัน · BKK01/04 = 3 วัน · <b>BKK01/04 ที่ CGO TERM เป็น CFS/CY = 0 วัน</b></li>
+      <li>ถ้ามี Special F/T (TML) จะใช้แทน free time ปกติ</li>
+      <li>ค่า storage = ยอดสะสมของขั้น + (วันคิดเงิน − วันเริ่มขั้น) × อัตราต่อวัน · BKK02 คิดอัตราเดียว</li>
+      <li>Free time ลูกค้า: GP 5 วัน · DG/RF 3 วัน · +1 วัน ถ้า BKK + RF + KTS · +1 วัน ถ้า KHS</li>
+    </ul>
+  </div>
+</section>
+</main>
+
+<script>
+/* ------------------------------------------------------------------ tariff (ชีท Charge) */
+const TIERS = {
+  "G1|GP|20'":[[0,0,125],[3,375,250],[10,2275,400]],
+  "G1|GP|40'":[[0,0,250],[3,750,500],[10,4550,800]],
+  "G1|DG|20'":[[0,0,375],[3,1125,750],[10,6825,1200]],
+  "G1|DG|40'":[[0,0,750],[3,2250,1500],[10,13650,2400]],
+  "G2|GP|20'":[[0,0,125],[7,875,250],[14,2625,400]],
+  "G2|GP|40'":[[0,0,250],[7,1750,500],[14,5250,800]],
+  "G2|DG|20'":[[0,0,375],[7,2625,750],[14,7875,1200]],
+  "G2|DG|40'":[[0,0,750],[7,5250,1500],[14,15750,2400]],
+  "G3|GP|20'":[[0,0,160],[7,1120,275],[14,3045,390]],
+  "G3|GP|40'":[[0,0,320],[7,2240,550],[14,6090,780]],
+  "G3|DG|20'":[[0,0,480],[7,3360,825],[14,9135,1170]],
+  "G3|DG|40'":[[0,0,960],[7,6720,1650],[14,18270,2340]],
+  "G4|GP|20'":[[0,0,50]], "G4|GP|40'":[[0,0,100]],
+  "G4|DG|20'":[[0,0,150]],"G4|DG|40'":[[0,0,300]],
+  "CUST|GP|20'":[[0,0,375],[5,1200,750],[9,4800,1500]],
+  "CUST|GP|40'":[[0,0,750],[7,2400,1500],[14,9600,3000]],
+  "CUST|DG|20'":[[0,0,900],[5,3360,1800],[9,9135,3600]],
+  "CUST|DG|40'":[[0,0,1800],[9,6720,3600],[9,18270,7200]],
+};
+const LOCS = [
+  {code:"BKK01",name:"PAT / Terminal 2",area:"BKK"},
+  {code:"BKK04",name:"PAT / Terminal 1",area:"BKK"},
+  {code:"BKK02",name:"Unithai",area:"UTCT"},
+  {code:"LCH01",name:"ESCO B3",area:"LCH"},
+  {code:"LCH02",name:"Hutchison A2",area:"LCH"},
+  {code:"LCH03",name:"TIPS B4",area:"LCH"},
+  {code:"LCH04",name:"LCMT A0/B1",area:"LCH"},
+  {code:"LCH05",name:"LCIT B5",area:"LCH"},
+  {code:"LCH06",name:"Hutchison A3",area:"LCH"},
+  {code:"LCH08",name:"Hutchison C1C2",area:"LCH"},
+  {code:"LCH09",name:"Hutchison D1",area:"LCH"},
+  {code:"LCH10",name:"LCIT C3",area:"LCH"},
+];
+const GROUP_OF_LOC = {LCH04:"G1",BKK01:"G3",BKK04:"G3",BKK02:"G4"};
+const TERMINAL_FT = {LCH01:7,LCH02:7,LCH03:7,LCH04:7,LCH05:7,LCH06:7,LCH08:7,LCH09:7,LCH10:7,BKK02:5};
+const GROUP_INFO = {
+  G1:{title:"LCMT",locs:"LCH04"}, G2:{title:"ESCO · TIPS · LCIT · Hutchison",locs:"LCH01 02 03 05 06 08 09 10"},
+  G3:{title:"PAT",locs:"BKK01 Terminal 2 · BKK04 Terminal 1"}, G4:{title:"Unithai (UTCT)",locs:"BKK02 · อัตราเดียว"},
+  CUST:{title:"ลูกค้า (คืนตู้ก่อนกำหนด)",locs:"ใช้ทุก terminal"}
+};
+
+const groupOf = loc => GROUP_OF_LOC[loc] || "G2";
+const areaOf = loc => !loc ? "OTHER" : loc==="BKK02" ? "UTCT" : loc.startsWith("BKK") ? "BKK" : loc.startsWith("LCH") ? "LCH" : "OTHER";
+const CFS_ZERO_FT_LOCS = ["BKK01","BKK04"];   // PAT: CGO TERM CFS/CY (stuffing ใน terminal) ไม่มี free time
+const isCfsCy = cgo => String(cgo??"").replace(/\s/g,"").toUpperCase()==="CFS/CY";
+const ftTerminal = (loc,dg,cgo) => (CFS_ZERO_FT_LOCS.includes(loc)&&isCfsCy(cgo)) ? 0 : dg ? 1 : (TERMINAL_FT[loc] ?? 3);
+const custFt = (loc,dg,rf,svc) => (dg||rf?3:5) + ((loc||"").startsWith("BKK")&&rf&&svc==="KTS"?1:0) + (svc==="KHS"?1:0);
+
+function tierCharge(key, days){
+  if(!(days>0)) return 0;
+  let row; for(const t of TIERS[key]) if(t[0]<=days) row=t;
+  return row[1] + (days-row[0])*row[2];
+}
+function breakdown(key, days){
+  const ts=TIERS[key], out=[];
+  ts.forEach((t,i)=>{
+    const end = i+1<ts.length ? ts[i+1][0] : Infinity;
+    const n = Math.min(days,end) - t[0];
+    if(n>0) out.push({from:t[0]+1,to:t[0]+n,n,rate:t[2],amt:n*t[2]});
+  });
+  return out;
+}
+
+/* ------------------------------------------------------------------ dates as day numbers */
+const DAY=864e5;
+function dayFromISO(s){ if(!s) return null; const [y,m,d]=s.split("-").map(Number); return Date.UTC(y,m-1,d)/DAY; }
+function toDay(v){
+  if(v==null||v==="") return null;
+  if(typeof v==="number") return Math.floor(v) - 25569;           // Excel serial
+  if(v instanceof Date) return Date.UTC(v.getFullYear(),v.getMonth(),v.getDate())/DAY;
+  const s=String(v).trim();
+  let m=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/); if(m) return Date.UTC(+m[1],m[2]-1,+m[3])/DAY;
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(m) return Date.UTC(+m[3],m[2]-1,+m[1])/DAY;
+  return null;
+}
+function fmtDay(n, short){ if(n==null) return "–"; const d=new Date(n*DAY);
+  const dd=String(d.getUTCDate()).padStart(2,"0"), mm=String(d.getUTCMonth()+1).padStart(2,"0");
+  return short ? `${dd}/${mm}` : `${dd}/${mm}/${d.getUTCFullYear()}`; }
+const TH_DOW=["อา","จ","อ","พ","พฤ","ศ","ส"];
+const dow = n => TH_DOW[new Date(n*DAY).getUTCDay()];
+const money = n => Math.round(n).toLocaleString("en-US");
+const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ------------------------------------------------------------------ tabs */
+const tabs=[...document.querySelectorAll("nav button")];
+function showTab(name){
+  tabs.forEach(b=>b.setAttribute("aria-selected", String(b.dataset.tab===name)));
+  ["quick","file","dash","tariff"].forEach(v=>document.getElementById("view-"+v).hidden = v!==name);
+  try{ localStorage.setItem("hal-storage-tab",name);}catch(e){}
+}
+tabs.forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
+try{ const t=localStorage.getItem("hal-storage-tab"); if(t) showTab(t);}catch(e){}
+
+/* ------------------------------------------------------------------ quick calc */
+const $=id=>document.getElementById(id);
+const locSel=$("q-loc");
+["BKK","UTCT","LCH"].forEach(a=>{
+  const g=document.createElement("optgroup"); g.label=a;
+  LOCS.filter(l=>l.area===a).forEach(l=>{ const o=document.createElement("option"); o.value=l.code; o.textContent=`${l.code} — ${l.name}`; g.appendChild(o); });
+  locSel.appendChild(g);
+});
+locSel.value="BKK01";
+
+function quick(){
+  const loc=locSel.value, size=document.querySelector("input[name=size]:checked").value;
+  const cargo=document.querySelector("input[name=cargo]:checked").value;
+  const dg=cargo==="DG", rf=cargo==="RF", group=groupOf(loc), key=`${group}|${dg?"DG":"GP"}|${size}`;
+  const din=dayFromISO($("q-in").value), etd=dayFromISO($("q-etd").value);
+  const qty=Math.max(1, parseInt($("q-qty").value)||1);
+  const sft=parseInt($("q-sft").value)||0;
+  const cgo=$("q-cgo").value;
+  const ft = sft>0 ? sft : ftTerminal(loc,dg,cgo);
+  const valid = din!=null && etd!=null && etd>=din;
+  const stay = valid ? etd-din+1 : null;
+  const days = valid ? Math.max(stay-ft,0) : 0;
+  const per = tierCharge(key,days);
+
+  $("r-total").innerHTML = `${money(per*qty)}<small>THB</small>`;
+  $("r-note").textContent = (din==null||etd==null) ? "ใส่วันตู้เข้าและ ETD เพื่อเริ่มคำนวณ"
+    : !valid ? "ตรวจวันที่: ETD ต้องไม่ก่อนวันตู้เข้า"
+    : qty>1 ? `${money(per)} บาท/ตู้ × ${qty} ตู้` : days>0 ? "เกิน free time" : "ยังอยู่ใน free time ไม่มีค่าใช้จ่าย";
+  const L=LOCS.find(l=>l.code===loc);
+  $("r-chips").innerHTML = `<span class="chip acc">${group}</span><span class="chip">${L.area} · ${esc(L.name)}</span><span class="chip">${size}</span>`
+    + (dg?'<span class="chip dg">DG</span>':rf?'<span class="chip rf">RF</span>':'<span class="chip">GP</span>')
+    + (sft>0?'<span class="chip acc">Special F/T</span>':'')
+    + (!sft&&ft===0&&CFS_ZERO_FT_LOCS.includes(loc)?'<span class="chip acc">CFS/CY · F/T 0</span>':'');
+  $("r-stay").textContent = valid ? `${stay} วัน` : "–";
+  $("r-ft").textContent = `${ft} วัน`;
+  $("r-days").textContent = valid ? `${days} วัน` : "–";
+  $("r-freeuntil").textContent = din!=null ? `${dow(din+ft-1)} ${fmtDay(din+ft-1)}` : "–";
+
+  let html="";
+  if(valid && days>0){
+    const bk=breakdown(key,days); let sum=0;
+    bk.forEach(b=>{ sum+=b.amt; html+=`<tr><td>วันคิดเงินที่ ${b.from}${b.to>b.from?"–"+b.to:""} <span class="total-note">· ${b.n} วัน × ${money(b.rate)}</span></td><td class="num">${money(b.amt)}</td></tr>`; });
+    if(sum!==per) html+=`<tr class="diff"><td>ปรับตามยอดสะสมในตาราง Charge</td><td class="num">${per-sum>0?"+":""}${money(per-sum)}</td></tr>`;
+  } else if(valid){
+    html=`<tr><td class="total-note">ตู้เข้าภายใน free time ${ft} วัน · ไม่มีค่า storage</td><td></td></tr>`;
+  }
+  $("r-brk").innerHTML=html;
+
+  // customer
+  const cft=custFt(loc,dg,rf,$("q-svc").value);
+  $("c-ft").textContent=`${cft} วัน`;
+  const allow=dayFromISO($("q-allow").value);
+  if(allow!=null && din!=null){
+    const early=Math.max(allow-din,0), over=Math.max(early-sft,0);
+    const amt=tierCharge(`CUST|${dg?"DG":"GP"}|${size}`,over);
+    $("c-early").textContent=`${over} วัน`;
+    $("c-amt").textContent=money(amt*qty);
+    $("c-note").textContent = over>0 ? `ลูกค้าคืนตู้ก่อนวันที่ให้คืน (${fmtDay(allow)}) ${over} วัน` : "คืนตู้ไม่ก่อนวันที่ให้คืน ไม่มีค่าเก็บลูกค้า";
+  } else {
+    $("c-early").textContent="–"; $("c-amt").textContent="–";
+    $("c-note").textContent="ใส่วันแรกที่ให้คืนตู้ เพื่อคำนวณค่าที่เก็บลูกค้าได้";
+  }
+
+  // strip: gate-in options
+  $("s-etd").textContent = etd!=null ? fmtDay(etd) : "–";
+  if(etd==null){ $("s-bars").innerHTML=""; return; }
+  const span = Math.max(ft+10, valid?stay:0, 14);
+  const vals=[]; for(let k=span-1;k>=0;k--){ const d=etd-k, st=k+1, ds=Math.max(st-ft,0); vals.push({d,st,ds,amt:tierCharge(key,ds)}); }
+  const max=Math.max(...vals.map(v=>v.amt),1);
+  $("s-bars").innerHTML = vals.map(v=>{
+    const cls=(v.ds>0?"paid":"free")+(v.d===din?" sel":"");
+    const w = v.ds>0 ? Math.max(v.amt/max*100,2) : 100;
+    return `<div class="bar ${cls}"><span class="d">${dow(v.d)} ${fmtDay(v.d,true)} · ${v.st}ว</span><span class="track"><span class="fill" style="width:${w}%"></span></span><span class="a">${v.ds>0?money(v.amt):"ฟรี"}</span></div>`;
+  }).join("");
+}
+$("qform").addEventListener("input",quick);
+$("qform").addEventListener("change",quick);
+$("qform").addEventListener("submit",e=>e.preventDefault());
+quick();
+
+/* ------------------------------------------------------------------ file mode */
+// รับได้ทั้งไฟล์ดิบจากระบบ LOAD / BKG / GATE (.xls) และไฟล์ TEMPLATE ที่มีชีท 1.Loading 2.Bookinglist 3.GateMove
+let SOURCES=[];            // {name, kind, loading, booking, gate, manual, info, error}
+let ROWS=[], WARNINGS=[];
+const OVERRIDES=new Map(); // `${file}|${cntr}` -> F/T ที่แก้ในตาราง
+let AREA_FILTER="ALL", ONLY_PAID=false, QUERY="";
+let BKG_HEAD=[], GATE_HEAD=[];  // header rows kept for export
+const KIND_LABEL={LOAD:"Loading",BKG:"Booking",GATE:"Gate move",TEMPLATE:"Template"};
+
+function sheetRows(wb,name){ return XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null}); }
+const clean = rows => rows.filter(r=>r&&r[0]!=null&&String(r[0]).trim()!=="");
+
+function classify(wb,name){
+  const src={name,kind:null,loading:[],booking:[],gate:[],manual:{},info:""};
+  if(["1.Loading","2.Bookinglist","3.GateMove"].every(s=>wb.SheetNames.includes(s))){
+    src.kind="TEMPLATE";
+    src.loading=clean(sheetRows(wb,"1.Loading").slice(1));
+    src.booking=clean(sheetRows(wb,"2.Bookinglist").slice(1));
+    src.gate=clean(sheetRows(wb,"3.GateMove").slice(1));
+    BKG_HEAD=(sheetRows(wb,"2.Bookinglist")[0]||[]).filter(v=>v!=null); GATE_HEAD=sheetRows(wb,"3.GateMove")[0]||GATE_HEAD;
+    if(wb.SheetNames.includes("CS")){
+      const ws=wb.Sheets["CS"], cs=sheetRows(wb,"CS");
+      for(let i=2;i<cs.length;i++){ const r=cs[i]; if(!r||!r[0]) continue;
+        const y=ws["Y"+(i+1)];
+        src.manual[r[0]]={orig:r[18],allow:r[21],spft:Number(r[27])||0,tml:String(r[28]??"").trim(),collect:Number(r[33])||0,
+          ftOverride:(y&&!y.f&&typeof y.v==="number")?y.v:null};
+      }
+    }
+  } else {
+    for(const sn of wb.SheetNames){
+      const rows=sheetRows(wb,sn);
+      for(let h=0;h<Math.min(rows.length,6);h++){
+        const hdr=(rows[h]||[]).map(v=>String(v??"").trim());
+        let kind=null;
+        if(hdr[0]==="B/K No") kind="BKG";
+        else if(hdr[0]==="Container No."&&hdr.includes("EQ Date")) kind="LOAD";
+        else if(hdr[0]==="Container No"&&hdr.includes("GateDate")) kind="GATE";
+        if(kind){
+          src.kind=kind; const data=clean(rows.slice(h+1));
+          if(kind==="LOAD") src.loading=data; else if(kind==="BKG"){ src.booking=data; BKG_HEAD=rows[h]; } else { src.gate=data; GATE_HEAD=rows[h]; }
+          break;
+        }
+      }
+      if(src.kind) break;
+    }
+  }
+  if(!src.kind){ src.error="ไม่รู้จักรูปแบบไฟล์ (ต้องเป็นไฟล์ Loading, Booking, Gate move หรือ TEMPLATE)"; return src; }
+  if(src.kind==="LOAD"||src.kind==="TEMPLATE"){
+    const full=src.loading.filter(r=>r[10]==="F");
+    const v=[...new Set(full.map(r=>`${r[2]} ${r[3]}`))];
+    src.info=`${v.join(", ")||"–"} · ${full.length} ตู้`;
+  } else if(src.kind==="BKG") src.info=`${src.booking.length} booking`;
+  else src.info=`${src.gate.length} รายการ`;
+  return src;
+}
+
+function recompute(){
+  const bk={}, gates={};
+  SOURCES.forEach(s=>s.booking.forEach(r=>{ if(!(r[0] in bk)) bk[r[0]]=r; }));
+  SOURCES.forEach(s=>s.gate.forEach(r=>{ (gates[r[0]] ||= []).push(r); }));
+  const hasBkg=SOURCES.some(s=>s.booking.length), hasGate=SOURCES.some(s=>s.gate.length), hasLoad=SOURCES.some(s=>s.loading.length);
+  ROWS=[]; WARNINGS=[];
+  if(SOURCES.length&&!hasLoad) WARNINGS.push("ยังไม่มีไฟล์ Loading (LOAD) ซึ่งใช้เป็นรายชื่อตู้ที่จะคำนวณ");
+  if(hasLoad&&!hasBkg) WARNINGS.push("ยังไม่มีไฟล์ Booking (BKG) จึงยังแยกตู้ DG และ Service ไม่ได้");
+  if(hasLoad&&!hasGate) WARNINGS.push("ยังไม่มีไฟล์ Gate move (GATE) จึงยังไม่รู้วันตู้เข้า และคำนวณค่า storage ไม่ได้");
+  SOURCES.filter(s=>s.loading.length).forEach(s=>{
+    s.loading.forEach(r=>{
+      if(r[10]!=="F") return;
+      const cntr=r[0], loc=r[13], bkno=r[16], tpsz=String(r[4]||"");
+      const b=bk[bkno]||[]; if(hasBkg&&!bk[bkno]) WARNINGS.push(`${cntr}: ไม่พบ Booking ${bkno}`);
+      const gl=gates[cntr]||[], g=gl.find(x=>x[12]===bkno)||gl[0];
+      if(hasGate&&!g) WARNINGS.push(`${cntr}: ไม่พบวันตู้เข้าในไฟล์ Gate move`);
+      const m=s.manual[cntr]||{};
+      const dg=![null,undefined,"",0,"0"].includes(b[42]), rf=tpsz.endsWith("RE");
+      const size=tpsz.startsWith("22")?"20'":"40'", svc=b[11];
+      const etd=toDay(r[1]), din=g?toDay(g[3]):null;
+      let ftDefault=ftTerminal(loc,dg,b[84]), ftNote=(ftDefault===0&&CFS_ZERO_FT_LOCS.includes(loc))?"CFS/CY ที่ PAT: F/T 0 วัน":"";
+      if(m.ftOverride!=null){ ftDefault=m.ftOverride; ftNote="กรอกเองในชีท CS"; WARNINGS.push(`${cntr}: ใช้ F/T = ${m.ftOverride} วัน ตามที่กรอกเองในชีท CS`); }
+      if(m.tml&&m.tml.toUpperCase()==="TML"&&m.spft>0){ ftDefault=m.spft; ftNote="Special F/T (TML)"; }
+      const allow=toDay(m.allow);
+      const over=(allow!=null&&din!=null)?Math.max(Math.max(allow-din,0)-(m.spft||0),0):0;
+      const key=`${s.name}|${cntr}`;
+      const row={key,file:s.name,cntr,loc,area:areaOf(loc),group:groupOf(loc),bkno,shipper:b[26]||r[22]||"",tpsz,size,dg,rf,
+        vessel:r[2],voy:r[3],svc,etd,din,stay:(etd!=null&&din!=null)?etd-din+1:null,
+        ftDefault,ftNote,ftOverride:OVERRIDES.has(key)?OVERRIDES.get(key):null,custFt:custFt(loc,dg,rf,svc),
+        custAmt:tierCharge(`CUST|${dg?"DG":"GP"}|${size}`,over),collect:m.collect||0,
+        vsl:b[12]||r[2]||"",voyNo:b[13]||r[3]||"",pol:b[14]||r[7]||"",lwharf:b[15]||r[27]||loc||"",
+        orig:toDay(m.orig),allow,over,spft:m.spft||0,tml:m.tml||"",_r:r,_b:b,_g:g||null};
+      row.setKey=[row.etd,row.svc,row.vsl,row.voyNo,row.pol,row.lwharf].join("|");
+      calcRow(row); ROWS.push(row);
+    });
+  });
+}
+function calcRow(r){
+  r.ft = r.ftOverride ?? r.ftDefault;
+  r.days = r.stay==null ? 0 : Math.max(r.stay-r.ft,0);
+  r.charge = tierCharge(`${r.group}|${r.dg?"DG":"GP"}|${r.size}`, r.days);
+}
+
+async function addFiles(list){
+  for(const f of list){
+    let src;
+    try{
+      const wb=XLSX.read(await f.arrayBuffer(),{type:"array",cellFormula:true});
+      src=classify(wb,f.name);
+    }catch(e){ src={name:f.name,kind:null,loading:[],booking:[],gate:[],manual:{},error:"อ่านไฟล์ไม่ได้ ตรวจว่าเป็นไฟล์ Excel ที่ไม่ได้ตั้งรหัสผ่าน"}; }
+    SOURCES=SOURCES.filter(x=>x.name!==f.name).concat(src);
+  }
+  renderFiles();
+}
+const input=$("f-input"), drop=$("drop");
+input.addEventListener("change",()=>{ addFiles([...input.files]); input.value=""; });
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>addFiles([...e.dataTransfer.files]));
+
+function allRows(){ return ROWS; }
+function agg(rows){ return {n:rows.length, over:rows.filter(r=>r.days>0).length, days:rows.reduce((s,r)=>s+r.days,0),
+  charge:rows.reduce((s,r)=>s+r.charge,0), cust:rows.reduce((s,r)=>s+r.custAmt,0), hal:rows.reduce((s,r)=>s+r.charge-r.collect,0),
+  c20:rows.filter(r=>r.size==="20'").length, c40:rows.filter(r=>r.size==="40'").length}; }
+
+function renderFiles(){
+  recompute();
+  const has=k=>SOURCES.some(s=>s.kind===k||s.kind==="TEMPLATE");
+  const slots = SOURCES.length ? `<div class="slots">${["LOAD","BKG","GATE"].map(k=>`<span class="slot ${has(k)?"on":""}"><b>${has(k)?"✓":"·"}</b>${k} <span>${KIND_LABEL[k]}</span></span>`).join("")}</div>` : "";
+  $("f-list").innerHTML = SOURCES.length ? slots + SOURCES.map((s,i)=>`<span class="chip ${s.error?"dg":"ok"}" title="${esc(s.error||"")}"><b>${s.kind||"?"}</b> ${esc(s.name)}${s.info?" · "+esc(s.info):""}<button type="button" class="x" data-i="${i}" aria-label="เอาไฟล์ ${esc(s.name)} ออก">×</button></span>`).join("")
+    + `<button class="btn" id="f-clear" type="button">ล้างทั้งหมด</button>` : "";
+  $("f-list").querySelectorAll(".x").forEach(b=>b.onclick=()=>{ SOURCES.splice(+b.dataset.i,1); renderFiles(); });
+  if($("f-clear")) $("f-clear").onclick=()=>{SOURCES=[];OVERRIDES.clear();renderFiles();};
+  const w=SOURCES.filter(s=>s.error).map(s=>`${s.name} — ${s.error}`).concat(WARNINGS);
+  if(typeof DB_STATE!=="undefined"&&DB_STATE!=="ok") renderDash();   // dashboard follows open files when no database
+  $("f-warn").innerHTML = w.length ? `<div class="warns"><strong>ข้อควรตรวจสอบ</strong>${w.map(x=>`<span>${esc(x)}</span>`).join("")}</div>` : "";
+  renderResults();
+}
+
+function renderResults(){
+  const rows=allRows(), out=$("f-out");
+  if(!rows.length){ out.innerHTML = SOURCES.some(s=>s.loading.length) ? `<p class="empty">ไม่พบตู้ Full ในไฟล์ Loading</p>` : ""; return; }
+  const areas=["BKK","UTCT","LCH"];
+  const tiles = areas.map(a=>{ const s=agg(rows.filter(r=>r.area===a));
+    return `<div class="panel area ${s.charge>0?"has":""}"><span class="label">${a}</span><span class="amt">${money(s.charge)}</span>
+      <span class="sub">${s.n} ตู้ · เกิน F/T ${s.over} ตู้ · ${s.days} วัน</span></div>`; }).join("");
+  const g=agg(rows);
+  const grand=`<div class="panel area grand"><span class="label">รวมทั้งหมด (HAL จ่าย)</span><span class="amt">${money(g.hal)}</span>
+      <span class="sub">${g.n} ตู้ · 20' ${g.c20} / 40' ${g.c40} · เก็บลูกค้า ${money(g.cust)}</span></div>`;
+
+  // per voyage set (ETD SVC VSL VOY POL LWharf) — one export file each
+  const vt = voyageSets().map(v=>{ const s=agg(v.rows); const r0=v.rows[0];
+    return `<tr><td>${r0.area}</td><td class="num">${fmtDay(r0.etd)}</td><td>${esc(r0.svc)}</td><td>${esc(r0.vsl)} ${esc(r0.voyNo)}</td><td>${esc(r0.pol)}</td><td>${esc(r0.lwharf)}</td>
+      <td class="r num">${s.n}</td><td class="r num">${s.c20}</td><td class="r num">${s.c40}</td><td class="r num">${s.over}</td><td class="r num">${s.days}</td>
+      <td class="r num">${money(s.charge)}</td><td class="r num">${money(s.cust)}</td><td class="r num">${money(s.hal)}</td>
+      <td style="display:flex;gap:6px"><button class="btn xbtn" type="button" data-k="${esc(v.key)}" title="${esc(exportName(r0))}">Export</button>
+      <button class="btn sbtn" type="button" data-k="${esc(v.key)}" data-n="${esc(voyName(r0))}" ${DB?"":"hidden"}>บันทึกเข้า Dashboard</button></td></tr>`; }).join("");
+
+  out.innerHTML = `<div class="areas">${tiles}${grand}</div>
+  <div class="section-h"><h2>สรุปตามเที่ยวเรือ</h2>
+    <div class="tools"><span class="total-note" id="x-status" aria-live="polite"></span><button class="btn" type="button" id="s-all" ${DB?"":"hidden"}>บันทึกทั้งหมดเข้า Dashboard</button><button class="btn primary" type="button" id="x-all">Export ทั้งหมด (.xlsx)</button></div>
+  </div>
+  <div class="scroll"><table class="grid"><thead><tr><th>พื้นที่</th><th>ETD</th><th>SVC</th><th>VSL / VOY</th><th>POL</th><th>LWharf</th><th class="r">ตู้</th><th class="r">20'</th><th class="r">40'</th><th class="r">เกิน F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th><th class="r">เก็บลูกค้า</th><th class="r">HAL จ่าย</th><th>ไฟล์</th></tr></thead><tbody>${vt}</tbody></table></div>
+  <p class="total-note" style="margin-top:8px">ชื่อไฟล์ Export = ETD_SVC_VSL_VOY_POL_LWharf เช่น <span class="mono">${esc(exportName(voyageSets()[0].rows[0]))}</span></p>
+  <div class="section-h"><h2>รายตู้</h2>
+    <div class="tools">
+      <div class="filt" role="group" aria-label="กรองพื้นที่">${["ALL",...areas].map(a=>`<button type="button" data-a="${a}" aria-pressed="${AREA_FILTER===a}">${a==="ALL"?"ทั้งหมด":a}</button>`).join("")}</div>
+      <label class="check"><input type="checkbox" id="f-paid" ${ONLY_PAID?"checked":""}> เฉพาะที่มีค่า</label>
+      <input type="search" id="f-q" placeholder="ค้นหาตู้ / booking / shipper" value="${esc(QUERY)}">
+      <button class="btn" type="button" id="f-copy">คัดลอกตารางไปวาง Excel</button>
+    </div>
+  </div>
+  <div id="f-copyfallback"></div>
+  <div class="scroll" id="f-tablewrap"></div>
+  <p class="total-note" style="margin-top:8px">ช่อง F/T แก้ได้ทีละตู้เพื่อลองคำนวณ (ลบค่าออกเพื่อกลับไปใช้ค่าเดิม) · ค่าที่แก้จะไม่ถูกบันทึกกลับไปที่ไฟล์</p>`;
+
+  out.querySelectorAll(".filt button").forEach(b=>b.onclick=()=>{AREA_FILTER=b.dataset.a; out.querySelectorAll(".filt button").forEach(x=>x.setAttribute("aria-pressed",String(x===b))); renderTable();});
+  $("f-paid").onchange=e=>{ONLY_PAID=e.target.checked; renderTable();};
+  $("f-q").oninput=e=>{QUERY=e.target.value; renderTable();};
+  $("f-copy").onclick=copyTable;
+  out.querySelectorAll(".xbtn").forEach(b=>b.onclick=()=>exportSets(voyageSets().filter(v=>v.key===b.dataset.k)));
+  $("x-all").onclick=()=>exportSets(voyageSets());
+  out.querySelectorAll(".sbtn").forEach(b=>b.onclick=()=>saveSets(voyageSets().filter(v=>v.key===b.dataset.k)));
+  if($("s-all")) $("s-all").onclick=()=>saveSets(voyageSets());
+  refreshSaveLabels();
+  renderTable();
+}
+
+function visibleRows(){
+  const q=QUERY.trim().toLowerCase();
+  return allRows().filter(r=>(AREA_FILTER==="ALL"||r.area===AREA_FILTER)&&(!ONLY_PAID||r.charge>0)
+    &&(!q||[r.cntr,r.bkno,r.shipper].some(v=>String(v||"").toLowerCase().includes(q))))
+    .sort((a,b)=>b.charge-a.charge||String(a.cntr).localeCompare(b.cntr));
+}
+function renderTable(){
+  const rows=visibleRows(), wrap=$("f-tablewrap"); if(!wrap) return;
+  if(!rows.length){ wrap.innerHTML=`<p class="empty">ไม่มีตู้ที่ตรงกับตัวกรอง</p>`; return; }
+  const s=agg(rows);
+  wrap.innerHTML=`<table class="grid"><thead><tr><th>Container</th><th>Loc</th><th>Booking</th><th>Shipper</th><th>Type</th><th></th><th>ตู้เข้า</th><th>ETD</th><th class="r">อยู่</th><th class="r">F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th><th class="r">F/T ลูกค้า</th></tr></thead>
+  <tbody>${rows.map(r=>`<tr class="${r.charge>0?"paid":""}"><td class="mono">${esc(r.cntr)}</td><td>${esc(r.loc)}</td><td class="mono">${esc(r.bkno)}</td>
+    <td class="shp" title="${esc(r.shipper)}">${esc(r.shipper)}</td><td class="mono">${esc(r.tpsz)}</td>
+    <td>${r.dg?'<span class="chip dg">DG</span>':""}${r.rf?'<span class="chip rf">RF</span>':""}</td>
+    <td class="num">${fmtDay(r.din,true)}</td><td class="num">${fmtDay(r.etd,true)}</td><td class="r num">${r.stay??"–"}</td>
+    <td class="r"><input class="ftin ${r.ftOverride!=null||r.ftNote?"set":""}" type="number" min="0" step="1" value="${r.ft}" data-c="${esc(r.cntr)}" data-f="${esc(r.file)}" aria-label="F/T ${esc(r.cntr)}" title="${esc(r.ftNote||"ค่าเริ่มต้น "+r.ftDefault+" วัน")}"></td>
+    <td class="r num">${r.days}</td><td class="r num amt">${money(r.charge)}</td><td class="r num">${r.custFt}</td></tr>`).join("")}</tbody>
+  <tfoot><tr><td colspan="10">${s.n} ตู้</td><td class="r num">${s.days}</td><td class="r num">${money(s.charge)}</td><td></td></tr></tfoot></table>`;
+  wrap.querySelectorAll(".ftin").forEach(inp=>inp.addEventListener("change",()=>{
+    const r=allRows().find(x=>x.cntr===inp.dataset.c&&x.file===inp.dataset.f); if(!r) return;
+    const v=inp.value.trim(); r.ftOverride = v===""||Number(v)===r.ftDefault ? null : Math.max(0,parseInt(v)||0);
+    if(r.ftOverride==null) OVERRIDES.delete(r.key); else OVERRIDES.set(r.key,r.ftOverride);
+    calcRow(r); renderResults();
+  }));
+}
+
+/* ------------------------------------------------------------------ export (.xlsx) */
+function voyageSets(){
+  const m=new Map();
+  ROWS.forEach(r=>{ if(!m.has(r.setKey)) m.set(r.setKey,{key:r.setKey,rows:[]}); m.get(r.setKey).rows.push(r); });
+  return [...m.values()].sort((a,b)=>(a.rows[0].etd??0)-(b.rows[0].etd??0)||a.key.localeCompare(b.key));
+}
+function isoDay(n){ if(n==null) return "NOETD"; const d=new Date(n*DAY); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`; }
+function exportName(r){
+  return [isoDay(r.etd),r.svc,r.vsl,r.voyNo,r.pol,r.lwharf].map(v=>String(v||"-").trim().replace(/[\\/:*?"<>|\s]+/g,"-")).join("_")+".xlsx";
+}
+const CS_HEAD=["Container No.","Group","Location","Booking No.","Shipper","Org Shipper","RCVCD","POL","POD","TS PORT","Type Size","CGO TERM","DG","RF",
+  "Vessel","Voyage","SVC","Size","Original Schedule","ETD","Vssl Delay","1st Date allow to return","Date In","Total Stay","Normal F/T Terminal",
+  "Total Storage Days","Total Storage Charge","Special F/T","HQ Ref No. / TML / APP BY","Free Time Customer","คืนก่อนเรือออก","Over F/T Customer",
+  "Amount due to Customer","Collection","Amount due to HAL","Remark","SALESNM","CUST ETD","PICK UP","COMMON REMARKS","ROLL"];
+const serial = n => n==null ? null : n+25569;   // day number -> Excel date serial
+
+// Excel look: Tahoma 8, thin grid on every used cell, dark header row, amber total row
+const XL_LINE={style:"thin",color:{rgb:"7F8A93"}}, XL_BORDER={top:XL_LINE,bottom:XL_LINE,left:XL_LINE,right:XL_LINE};
+function styleGrid(ws,{head=0,total=null,paidCol=null,skipEmpty=false,labelCol=null}={}){
+  if(!ws["!ref"]) return;
+  const R=XLSX.utils.decode_range(ws["!ref"]);
+  for(let r=R.s.r;r<=R.e.r;r++){
+    let empty=true; for(let c=R.s.c;c<=R.e.c;c++){ const x=ws[XLSX.utils.encode_cell({r,c})]; if(x&&x.v!==""&&x.v!=null){empty=false;break;} }
+    if(skipEmpty&&empty) continue;
+    const pc=paidCol!=null?ws[XLSX.utils.encode_cell({r,c:paidCol})]:null, paid=pc&&typeof pc.v==="number"&&pc.v>0&&r!==head&&r!==total;
+    for(let c=R.s.c;c<=R.e.c;c++){
+      const a=XLSX.utils.encode_cell({r,c}); if(!ws[a]){ if(skipEmpty) continue; ws[a]={t:"s",v:""}; }
+      let st={font:{name:"Tahoma",sz:8},border:XL_BORDER,alignment:{vertical:"center"}};
+      if(r===head) st={font:{name:"Tahoma",sz:8,bold:true,color:{rgb:"FFFFFF"}},fill:{fgColor:{rgb:"1F3A4D"}},border:XL_BORDER,alignment:{horizontal:"center",vertical:"center",wrapText:true}};
+      else if(r===total) st={...st,font:{name:"Tahoma",sz:8,bold:true},fill:{fgColor:{rgb:"FFF1D6"}}};
+      else if(paid&&c===paidCol) st={...st,font:{name:"Tahoma",sz:8,bold:true},fill:{fgColor:{rgb:"FBE2C8"}}};
+      else if(labelCol===c) st={...st,font:{name:"Tahoma",sz:8,bold:true},fill:{fgColor:{rgb:"F3F5F7"}}};
+      ws[a].s=st;
+    }
+  }
+}
+function buildWorkbook(set){
+  const rows=[...set.rows].sort((a,b)=>b.charge-a.charge||String(a.cntr).localeCompare(b.cntr)), r0=rows[0], s=agg(rows);
+  const wb=XLSX.utils.book_new();
+  // Summary
+  const sum=[["HAL Storage — สรุปค่า Storage"],[],
+    ["ETD",serial(r0.etd)],["SVC",r0.svc],["VSL",r0.vsl],["VOY",r0.voyNo],["POL",r0.pol],["LWharf",r0.lwharf],["Area",r0.area],["Terminal group",r0.group],[],
+    ["จำนวนตู้",s.n],["20'",s.c20],["40'",s.c40],["ตู้ที่เกิน F/T",s.over],["Storage Days",s.days],
+    ["Total Storage Charge",s.charge],["Amount due to Customer",s.cust],["Collection",rows.reduce((t,r)=>t+r.collect,0)],["Amount due to HAL",s.hal],[],
+    ["คำนวณเมื่อ",new Date().toLocaleString("th-TH")],["ไฟล์ต้นทาง",[...new Set(rows.map(r=>r.file))].join(", ")]];
+  const ws1=XLSX.utils.aoa_to_sheet(sum);
+  if(ws1.B3) ws1.B3.z="dd/mm/yyyy";
+  ["B17","B18","B19","B20"].forEach(a=>{ if(ws1[a]) ws1[a].z="#,##0"; });
+  ws1["!cols"]=[{wch:24},{wch:34}];
+  styleGrid(ws1,{head:0,skipEmpty:true,labelCol:0});
+  XLSX.utils.book_append_sheet(wb,ws1,"Summary");
+  // CS (same columns as the template's CS sheet, values)
+  const data=rows.map(r=>{ const b=r._b;
+    return [r.cntr,r.group,r.loc,r.bkno,b[26]??"",b[27]??"",b[4]??"",b[14]??"",b[18]??"",b[25]??"",r.tpsz,b[84]??"",r.dg?"DG":"",r.rf?"RF":"",
+      r.vessel,r.voy,r.svc??"",r.size,serial(r.orig),serial(r.etd),(r.orig!=null&&r.etd!=null)?r.etd-r.orig:null,serial(r.allow),serial(r.din),r.stay,r.ft,
+      r.days,r.charge,r.spft||null,r.tml||null,r.custFt,(r.allow!=null&&r.etd!=null)?r.etd-r.allow+1:null,r.over,
+      r.custAmt,r.collect||null,r.charge-r.collect,r.ftOverride!=null?`F/T แก้ในแอพ (เดิม ${r.ftDefault})`:(r.ftNote||null),b[39]??"",b[100]??"",b[62]??"",b[51]??"",b[102]??""]; });
+  const tot=["TOTAL",`${s.n} ตู้`]; tot[25]=s.days; tot[26]=s.charge; tot[32]=s.cust; tot[34]=s.hal;
+  const ws2=XLSX.utils.aoa_to_sheet([CS_HEAD,...data,tot]);
+  const dateCols=[18,19,21,22], moneyCols=[26,32,33,34];
+  for(let i=1;i<=data.length+1;i++){
+    dateCols.forEach(c=>{ const a=XLSX.utils.encode_cell({r:i,c}); if(ws2[a]&&ws2[a].t==="n") ws2[a].z="dd/mm/yyyy"; });
+    moneyCols.forEach(c=>{ const a=XLSX.utils.encode_cell({r:i,c}); if(ws2[a]&&ws2[a].t==="n") ws2[a].z="#,##0"; });
+  }
+  ws2["!cols"]=CS_HEAD.map((h,i)=>({wch:[4,5,26,27].includes(i)?32:[0,3].includes(i)?17:[39,40].includes(i)?40:12}));
+  ws2["!autofilter"]={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:data.length,c:CS_HEAD.length-1}})};
+  styleGrid(ws2,{head:0,total:data.length+1,paidCol:26});
+  XLSX.utils.book_append_sheet(wb,ws2,"CS");
+  // raw source rows for this voyage, same layout as the template's input sheets
+  const bks=[...new Set(rows.map(r=>r.bkno))];
+  const H={LOAD:["Container No.","EQ Date","Vessel","Voyage","Type Size","CD","R.C.V","P.O.L","P.O.D","D.L.V","F/E","LEASE_TYPE","Move Code","Location","Area","Nation","Booking No.","T/S","S.O.C","Service","Remark","Auth. No.","Shipper","PreVSLMove","Consignee","Notify","CNTR WGT.","L-Wharf(B/L)","D-Wharf(B/L)"]};
+  const rawSheet=(head,body)=>{ const w=XLSX.utils.aoa_to_sheet([head,...body]); styleGrid(w); return w; };
+  XLSX.utils.book_append_sheet(wb,rawSheet(H.LOAD,rows.map(r=>r._r.slice(0,H.LOAD.length))),"1.Loading");
+  const bkRows=bks.map(k=>rows.find(r=>r.bkno===k)._b).filter(b=>b.length);
+  if(bkRows.length) XLSX.utils.book_append_sheet(wb,rawSheet(BKG_HEAD,bkRows.map(b=>b.slice(0,BKG_HEAD.length))),"2.Bookinglist");
+  const gRows=rows.map(r=>r._g).filter(Boolean);
+  if(gRows.length) XLSX.utils.book_append_sheet(wb,rawSheet(GATE_HEAD,gRows.map(g=>g.slice(0,GATE_HEAD.length))),"3.GateMove");
+  return wb;
+}
+
+let DL_NS; // downloads namespace (resolved lazily)
+async function getDownloads(){
+  if(DL_NS!==undefined) return DL_NS;
+  try{ DL_NS = window.claude?.use ? await window.claude.use("downloads") : null; }catch(e){ DL_NS=null; }
+  return DL_NS;
+}
+async function exportSets(sets){
+  const st=$("x-status"); if(!sets.length) return;
+  const inViewer=!!window.claude?.use;
+  const dl=inViewer ? await getDownloads() : null;
+  let ok=0, last="";
+  for(const set of sets){
+    const name=exportName(set.rows[0]);
+    const buf=XLSX.write(buildWorkbook(set),{bookType:"xlsx",type:"array"});
+    if(dl){
+      try{ await dl.save({filename:name,data:new Blob([buf])}); ok++; last=name; }
+      catch(e){
+        const c=e&&e.code;
+        if(c==="declined"){ st.textContent=`ยกเลิกการบันทึก ${name}`; continue; }
+        if(c==="rate_limited"){ st.textContent="มีหน้าต่างบันทึกเปิดค้างอยู่ ลองอีกครั้งในอีกสักครู่"; return; }
+        st.textContent="หน้านี้บันทึกไฟล์ไม่ได้ ลองเปิดแอพจากไฟล์ storage_app.html ในเครื่อง"; return;
+      }
+    } else if(!inViewer){
+      XLSX.writeFile(buildWorkbook(set),name); ok++; last=name;   // opened as a local file
+    } else { st.textContent="หน้านี้บันทึกไฟล์ไม่ได้ ลองเปิดแอพจากไฟล์ storage_app.html ในเครื่อง"; return; }
+  }
+  if(ok) st.textContent = ok===1 ? `บันทึกแล้ว: ${last}` : `บันทึกแล้ว ${ok} ไฟล์`;
+}
+
+function copyTable(){
+  const head=["Container","Location","Area","Booking","Shipper","Type","DG","RF","Vessel","Voyage","Date In","ETD","Total Stay","F/T","Storage Days","Storage Charge","Customer F/T","File"];
+  const lines=[head.join("\t")].concat(visibleRows().map(r=>[r.cntr,r.loc,r.area,r.bkno,r.shipper,r.tpsz,r.dg?"DG":"",r.rf?"RF":"",r.vessel,r.voy,
+    fmtDay(r.din),fmtDay(r.etd),r.stay??"",r.ft,r.days,r.charge,r.custFt,r.file].join("\t")));
+  const text=lines.join("\n"), btn=$("f-copy");
+  const fallback=()=>{ $("f-copyfallback").innerHTML=`<textarea class="copybox" id="f-copytext" aria-label="ข้อมูลตาราง" readonly></textarea>`; const t=$("f-copytext"); t.value=text; t.select(); btn.textContent="เลือกข้อความแล้ว กด Ctrl+C"; };
+  try{ navigator.clipboard.writeText(text).then(()=>{ btn.textContent="คัดลอกแล้ว"; setTimeout(()=>btn.textContent="คัดลอกตารางไปวาง Excel",1800); }, fallback); }
+  catch(e){ fallback(); }
+}
+
+/* ------------------------------------------------------------------ dashboard (shared database) */
+// เก็บ 1 เอกสารต่อเที่ยวเรือใน collection "voyages" : {meta, sum, rows}
+let DB=null, DBV=[], DB_STATE="loading", CAN_WRITE=true;
+let D_AREA="ALL", D_MONTH="ALL", D_OPEN=null, D_CONFIRM=null;
+const LOC_NAME = code => (LOCS.find(l=>l.code===code)||{}).name || code || "";
+const voyName = r0 => exportName(r0).replace(/\.xlsx$/,"");
+const docId = name => name.replace(/[^A-Za-z0-9_.~:@+-]/g,"-").slice(0,190) || "voyage";
+
+function voyageDoc(set){
+  const r0=set.rows[0], s=agg(set.rows);
+  return {
+    meta:{name:voyName(r0), etd:r0.etd!=null?isoDay(r0.etd):null, svc:r0.svc||"", vsl:r0.vsl||"", voy:r0.voyNo||"",
+      pol:r0.pol||"", lwharf:r0.lwharf||"", area:r0.area, group:r0.group,
+      terminal:[...new Set(set.rows.map(r=>LOC_NAME(r.loc)))].join(" / "),
+      sources:[...new Set(set.rows.map(r=>r.file))], savedAt:new Date().toISOString(), via:"app"},
+    sum:{n:s.n,c20:s.c20,c40:s.c40,dg:set.rows.filter(r=>r.dg).length,rf:set.rows.filter(r=>r.rf).length,
+      over:s.over,days:s.days,charge:s.charge,cust:s.cust,collect:set.rows.reduce((t,r)=>t+r.collect,0),hal:s.hal},
+    rows:set.rows.map(r=>({cntr:r.cntr,bkno:r.bkno||"",shipper:r.shipper||"",tpsz:r.tpsz,loc:r.loc||"",dg:!!r.dg,rf:!!r.rf,
+      din:r.din!=null?isoDay(r.din):null,stay:r.stay,ft:r.ft,days:r.days,charge:r.charge,cust:r.custAmt}))
+  };
+}
+
+async function saveSets(sets){
+  const st=$("x-status"); if(!DB||!sets.length) return;
+  let ok=0;
+  for(const set of sets){
+    const d=voyageDoc(set);
+    try{ await DB.collection("voyages").doc(docId(d.meta.name)).set(d); ok++; }
+    catch(e){
+      if(e&&e.code==="invalid_argument"){ CAN_WRITE=false; st.textContent="บัญชีนี้ดูได้อย่างเดียว บันทึกเข้า Dashboard ไม่ได้"; refreshSaveLabels(); return; }
+      if(e&&e.code==="quota_exceeded"){ st.textContent="ฐานข้อมูลเต็ม ลบเที่ยวเรือเก่าในแท็บ Dashboard ก่อน"; return; }
+      st.textContent=`บันทึก ${d.meta.name} ไม่สำเร็จ ลองอีกครั้ง`; return;
+    }
+  }
+  st.textContent = ok===1 ? "บันทึกเข้า Dashboard แล้ว" : `บันทึกเข้า Dashboard แล้ว ${ok} เที่ยว`;
+}
+function refreshSaveLabels(){
+  document.querySelectorAll(".sbtn").forEach(b=>{
+    b.hidden=!DB||!CAN_WRITE;
+    b.textContent = DBV.some(v=>v.meta&&v.meta.name===b.dataset.n) ? "อัปเดตใน Dashboard" : "บันทึกเข้า Dashboard";
+  });
+  const all=$("s-all"); if(all) all.hidden=!DB||!CAN_WRITE;
+}
+
+(async function initDb(){
+  if(!window.claude||!window.claude.use){ DB_STATE="local"; renderDash(); return; }
+  try{ DB=await window.claude.use("db"); }catch(e){ DB=null; }
+  if(!DB){ DB_STATE="off"; renderDash(); return; }
+  try{ const u=await window.claude.use("user"); if(u){ const c=await u.can("data.write"); if(c===false) CAN_WRITE=false; } }catch(e){}
+  $("d-import-lbl").hidden=!CAN_WRITE;
+  DB.collection("voyages").onSnapshot(snap=>{
+    DBV=snap.docs.map(d=>d.data()).filter(v=>v&&v.meta&&v.sum);
+    DB_STATE="ok"; renderDash(); refreshSaveLabels();
+  }, ()=>{ DB_STATE="off"; renderDash(); });
+})();
+
+function dashSource(){
+  if(DB_STATE==="ok") return DBV;
+  return voyageSets().map(voyageDoc);   // ฐานข้อมูลใช้ไม่ได้: แสดงจากไฟล์ที่เปิดอยู่ตอนนี้
+}
+const monthOf = v => (v.meta.etd||"").slice(0,7);
+const TH_MONTH=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+const monthLabel = m => m ? `${TH_MONTH[+m.slice(5,7)-1]} ${m.slice(0,4)}` : "ไม่มี ETD";
+const etdDay = v => v.meta.etd ? dayFromISO(v.meta.etd) : null;
+const sumOf = vs => vs.reduce((t,v)=>{ for(const k in v.sum) t[k]=(t[k]||0)+(v.sum[k]||0); return t; },{});
+
+function renderDash(){
+  const all=dashSource(), out=$("d-out"), st=$("d-status");
+  st.textContent = DB_STATE==="ok" ? `ฐานข้อมูล · ${all.length} เที่ยว`
+    : DB_STATE==="loading" ? "กำลังโหลดฐานข้อมูล…"
+    : "ไม่ได้เชื่อมฐานข้อมูล · แสดงจากไฟล์ที่เปิดอยู่";
+  $("d-import-lbl").hidden = DB_STATE!=="ok" || !CAN_WRITE;
+  // filters (one row, above the charts)
+  $("d-area").innerHTML=["ALL","BKK","UTCT","LCH"].map(a=>`<button type="button" data-a="${a}" aria-pressed="${D_AREA===a}">${a==="ALL"?"ทุกพื้นที่":a}</button>`).join("");
+  $("d-area").querySelectorAll("button").forEach(b=>b.onclick=()=>{D_AREA=b.dataset.a; renderDash();});
+  const months=[...new Set(all.map(monthOf))].sort().reverse();
+  if(D_MONTH!=="ALL"&&!months.includes(D_MONTH)) D_MONTH="ALL";
+  $("d-month").innerHTML=`<option value="ALL">ทุกเดือน (ETD)</option>`+months.map(m=>`<option value="${esc(m)}" ${m===D_MONTH?"selected":""}>${esc(monthLabel(m))}</option>`).join("");
+  $("d-month").onchange=e=>{D_MONTH=e.target.value; renderDash();};
+
+  if(DB_STATE==="loading"&&!all.length) return;
+  if(!all.length){
+    out.innerHTML=`<div class="panel dash-empty"><strong>ยังไม่มีเที่ยวเรือใน Dashboard</strong>
+      <p>ไปที่แท็บ "คำนวณจากไฟล์เรือ" ใส่ไฟล์ LOAD / BKG / GATE แล้วกด "บันทึกเข้า Dashboard"${DB_STATE==="ok"&&CAN_WRITE?" หรือนำเข้าไฟล์ DATABASE/STORAGE_DATABASE.xlsx ที่ได้จาก run_storage.bat":""}</p></div>`;
+    return;
+  }
+  const vs=all.filter(v=>(D_AREA==="ALL"||v.meta.area===D_AREA)&&(D_MONTH==="ALL"||monthOf(v)===D_MONTH))
+              .sort((a,b)=>(etdDay(b)??0)-(etdDay(a)??0)||a.meta.name.localeCompare(b.meta.name));
+  const t=sumOf(vs);
+  const scope=all.filter(v=>D_MONTH==="ALL"||monthOf(v)===D_MONTH);
+  const tiles=["BKK","UTCT","LCH"].map(a=>{ const s=sumOf(scope.filter(v=>v.meta.area===a));
+    return `<div class="panel area ${s.charge>0?"has":""}"><span class="label">${a}</span><span class="amt">${money(s.charge||0)}</span>
+      <span class="sub">${s.n||0} ตู้ · เกิน F/T ${s.over||0} ตู้ · ${scope.filter(v=>v.meta.area===a).length} เที่ยว</span></div>`; }).join("")
+    + `<div class="panel area grand"><span class="label">HAL จ่าย ${D_AREA==="ALL"?"รวม":D_AREA}</span><span class="amt">${money(t.hal||0)}</span>
+      <span class="sub">${vs.length} เที่ยว · ${t.n||0} ตู้ · เก็บลูกค้า ${money(t.cust||0)}</span></div>`;
+  if(!vs.length){ out.innerHTML=`<div class="areas">${tiles}</div><p class="empty">ไม่มีเที่ยวเรือตามตัวกรองนี้</p>`; return; }
+
+  const mx=Math.max(...vs.map(v=>v.sum.charge||0),1);
+  const vbars=vs.map(v=>`<div class="hb" title="${esc(v.meta.name)} · ${money(v.sum.charge||0)} บาท · ${v.sum.n} ตู้">
+      <span class="lab">${fmtDay(etdDay(v),true)} ${esc(v.meta.vsl)} ${esc(v.meta.voy)} <span class="total-note">${esc(v.meta.lwharf)}</span></span>
+      <span class="track">${v.sum.charge?`<span class="fillbar" style="width:${(v.sum.charge/mx*100).toFixed(2)}%"></span>`:`<span class="zero"></span>`}</span>
+      <span class="val"><b>${money(v.sum.charge||0)}</b> ฿</span></div>`).join("");
+
+  const shp={};
+  vs.forEach(v=>(v.rows||[]).forEach(r=>{ if(r.charge>0){ const k=r.shipper||"-"; shp[k]=shp[k]||[0,0]; shp[k][0]+=r.charge; shp[k][1]++; } }));
+  const top=Object.entries(shp).sort((a,b)=>b[1][0]-a[1][0]).slice(0,10), smx=top.length?top[0][1][0]:1;
+  const sbars = top.length ? top.map(([k,x])=>`<div class="hb" title="${esc(k)} · ${x[1]} ตู้ · ${money(x[0])} บาท">
+      <span class="lab">${esc(k)}</span><span class="track"><span class="fillbar" style="width:${(x[0]/smx*100).toFixed(2)}%"></span></span>
+      <span class="val"><b>${money(x[0])}</b> · ${x[1]}</span></div>`).join("") : `<p class="total-note">ไม่มีตู้ที่เสียค่า storage ในช่วงนี้</p>`;
+
+  const canDel = DB_STATE==="ok" && CAN_WRITE;
+  const trs=vs.map(v=>{ const id=docId(v.meta.name), open=D_OPEN===id;
+    let html=`<tr class="${v.sum.charge>0?"paid":""}"><td><button class="linkbtn" type="button" data-open="${esc(id)}" aria-expanded="${open}">${open?"▾":"▸"} ${esc(v.meta.name)}</button></td>
+      <td class="num">${fmtDay(etdDay(v))}</td><td>${esc(v.meta.area)}</td><td>${esc(v.meta.terminal)}</td>
+      <td class="r num">${v.sum.n}</td><td class="r num">${v.sum.over}</td><td class="r num">${v.sum.days}</td>
+      <td class="r num amt">${money(v.sum.charge||0)}</td><td class="r num">${money(v.sum.cust||0)}</td><td class="r num">${money(v.sum.hal||0)}</td>
+      <td>${canDel?`<button class="btn sm ${D_CONFIRM===id?"danger":""}" type="button" data-del="${esc(id)}">${D_CONFIRM===id?"ยืนยันลบ":"ลบ"}</button>`:""}</td></tr>`;
+    if(open){
+      const rs=[...(v.rows||[])].sort((a,b)=>b.charge-a.charge||String(a.cntr).localeCompare(b.cntr));
+      html+=`<tr class="detail"><td colspan="11"><div class="scroll"><table class="grid"><thead><tr><th>Container</th><th>Loc</th><th>Booking</th><th>Shipper</th><th>Type</th><th></th><th>ตู้เข้า</th><th class="r">อยู่</th><th class="r">F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th></tr></thead><tbody>`
+        + rs.map(r=>`<tr class="${r.charge>0?"paid":""}"><td class="mono">${esc(r.cntr)}</td><td>${esc(r.loc)}</td><td class="mono">${esc(r.bkno)}</td><td class="shp" title="${esc(r.shipper)}">${esc(r.shipper)}</td><td class="mono">${esc(r.tpsz)}</td>
+          <td>${r.dg?'<span class="chip dg">DG</span>':""}${r.rf?'<span class="chip rf">RF</span>':""}</td><td class="num">${r.din?fmtDay(dayFromISO(r.din)):"–"}</td>
+          <td class="r num">${r.stay??"–"}</td><td class="r num">${r.ft}</td><td class="r num">${r.days}</td><td class="r num amt">${money(r.charge)}</td></tr>`).join("")
+        + `</tbody></table></div><p class="total-note" style="margin:8px 0 0">ไฟล์ต้นทาง: ${esc((v.meta.sources||[]).join(", ")||"–")} · บันทึกเมื่อ ${v.meta.savedAt?new Date(v.meta.savedAt).toLocaleString("th-TH"):"–"}</p></td></tr>`;
+    }
+    return html; }).join("");
+
+  out.innerHTML=`<div class="areas">${tiles}</div>
+    <div class="dash-grid" style="margin-top:16px">
+      <div class="panel"><h3>ค่า Storage ต่อเที่ยวเรือ</h3><p class="total-note" style="margin:0 0 10px">THB · ETD ล่าสุดอยู่บนสุด · ชี้ที่แถวเพื่อดูรายละเอียด</p><div class="hbars">${vbars}</div></div>
+      <div class="panel"><h3>Shipper ที่มีค่า Storage สูงสุด</h3><p class="total-note" style="margin:0 0 10px">10 อันดับแรก · THB · จำนวนตู้ที่เสียค่า</p><div class="hbars">${sbars}</div></div>
+    </div>
+    <div class="section-h"><h2>เที่ยวเรือ (${vs.length})</h2><span class="total-note">คลิกชื่อเที่ยวเพื่อดูรายตู้</span></div>
+    <div class="scroll"><table class="grid"><thead><tr><th>ETD_SVC_VSL_VOY_POL_LWharf</th><th>ETD</th><th>พื้นที่</th><th>Terminal</th><th class="r">ตู้</th><th class="r">เกิน F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th><th class="r">เก็บลูกค้า</th><th class="r">HAL จ่าย</th><th></th></tr></thead>
+    <tbody>${trs}</tbody><tfoot><tr><td colspan="4">รวม ${vs.length} เที่ยว</td><td class="r num">${t.n||0}</td><td class="r num">${t.over||0}</td><td class="r num">${t.days||0}</td><td class="r num">${money(t.charge||0)}</td><td class="r num">${money(t.cust||0)}</td><td class="r num">${money(t.hal||0)}</td><td></td></tr></tfoot></table></div>`;
+
+  out.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>{ D_OPEN = D_OPEN===b.dataset.open ? null : b.dataset.open; renderDash(); });
+  out.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.del;
+    if(D_CONFIRM!==id){ D_CONFIRM=id; renderDash(); setTimeout(()=>{ if(D_CONFIRM===id){ D_CONFIRM=null; renderDash(); } },4000); return; }
+    D_CONFIRM=null; b.disabled=true;
+    try{ await DB.collection("voyages").doc(id).delete(); $("d-status").textContent="ลบแล้ว"; }
+    catch(e){ $("d-status").textContent="ลบไม่สำเร็จ ลองอีกครั้ง"; renderDash(); }
+  });
+}
+
+// import DATABASE/STORAGE_DATABASE.xlsx (from run_storage.bat) into the shared database
+$("d-import").addEventListener("change",async e=>{
+  const f=e.target.files[0]; e.target.value=""; if(!f||!DB) return;
+  const st=$("d-status");
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
+    if(!wb.Sheets.Voyages||!wb.Sheets.Containers){ st.textContent="ไฟล์นี้ไม่ใช่ STORAGE_DATABASE.xlsx (ต้องมีชีท Voyages และ Containers)"; return; }
+    const V=XLSX.utils.sheet_to_json(wb.Sheets.Voyages,{defval:null}).map(r=>({...r,Voyage:r["Voyage Key"]??r.Voyage})).filter(r=>r.Voyage&&!String(r.Voyage).startsWith("TOTAL"));
+    const C=XLSX.utils.sheet_to_json(wb.Sheets.Containers,{defval:null});
+    const iso=v=>{ const d=toDay(v); return d==null?null:isoDay(d); };
+    let ok=0;
+    for(const v of V){
+      const rs=C.filter(c=>(c["Voyage Key"]??c.Voyage)===v.Voyage).map(c=>({cntr:c["Container No."],bkno:c["Booking No."]||"",shipper:c.Shipper||"",tpsz:c["Type Size"]||"",
+        loc:c.Location||"",dg:!!c.DG,rf:!!c.RF,din:iso(c["Date In"]),stay:c["Total Stay"],ft:c["Normal F/T Terminal"],
+        days:c["Total Storage Days"]||0,charge:c["Total Storage Charge"]||0,cust:c["Amount due to Customer"]||0,collect:c.Collection||0,size:c.Size}));
+      const sum={n:rs.length,c20:rs.filter(r=>r.size==="20'").length,c40:rs.filter(r=>r.size==="40'").length,dg:rs.filter(r=>r.dg).length,rf:rs.filter(r=>r.rf).length,
+        over:rs.filter(r=>r.days>0).length,days:rs.reduce((t,r)=>t+r.days,0),charge:rs.reduce((t,r)=>t+r.charge,0),cust:rs.reduce((t,r)=>t+r.cust,0),
+        collect:rs.reduce((t,r)=>t+r.collect,0)}; sum.hal=sum.charge-sum.collect;
+      rs.forEach(r=>{ delete r.collect; delete r.size; });
+      const d={meta:{name:String(v.Voyage),etd:iso(v.ETD),svc:v.SVC||"",vsl:v.VSL||"",voy:String(v.VOY??""),pol:v.POL||"",lwharf:v.LWharf||"",
+        area:v.Area||"",group:v.Group||"",terminal:v.Terminal||"",sources:[f.name],savedAt:new Date().toISOString(),via:"import"},sum,rows:rs};
+      st.textContent=`กำลังนำเข้า ${ok+1}/${V.length}…`;
+      await DB.collection("voyages").doc(docId(d.meta.name)).set(d); ok++;
+    }
+    st.textContent=`นำเข้าแล้ว ${ok} เที่ยว`;
+  }catch(err){
+    st.textContent = err&&err.code==="invalid_argument" ? "บัญชีนี้ดูได้อย่างเดียว นำเข้าไม่ได้" : "นำเข้าไม่สำเร็จ ตรวจว่าเป็นไฟล์ STORAGE_DATABASE.xlsx";
+  }
+});
+
+/* ------------------------------------------------------------------ tariff view */
+(function(){
+  const order=["G3","G4","G1","G2","CUST"];
+  $("t-cards").innerHTML = order.map(g=>{
+    const info=GROUP_INFO[g], sizes=["20'","40'"], cargos=["GP","DG"];
+    const ts=TIERS[`${g}|GP|20'`];
+    const rows=ts.map((t,i)=>{
+      const next = i+1<ts.length ? ts[i+1][0] : null;
+      const lbl = g==="CUST" ? `ขั้น ${i+1}` : ts.length===1 ? "ทุกวัน" : next==null ? `วันที่ ${t[0]+1} ขึ้นไป` : `วันที่ ${t[0]+1}–${next}`;
+      return `<tr><td>${lbl}</td>${cargos.flatMap(c=>sizes.map(s=>{ const tt=TIERS[`${g}|${c}|${s}`][i];
+        return `<td class="num">${money(tt?.[2]??0)}${g==="CUST"&&tt?`<br><span class="total-note">วันที่ ${tt[0]+1}+</span>`:""}</td>`; })).join("")}</tr>`;
+    }).join("");
+    const ftTxt = g==="CUST" ? "GP 5 · DG/RF 3 วัน" : g==="G1"||g==="G2" ? "7 วัน (DG 1)" : g==="G4" ? "5 วัน (DG 1)" : "3 วัน (DG 1)";
+    return `<div class="panel tcard"><h3><span class="chip acc">${g==="CUST"?"Customer":g}</span>${esc(info.title)}</h3>
+      <p>${esc(info.locs)} · Free time ${ftTxt}</p>
+      <div style="overflow-x:auto"><table class="tt"><thead><tr><th>วันคิดเงิน</th><th>GP/RF 20'</th><th>GP/RF 40'</th><th>DG 20'</th><th>DG 40'</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  }).join("");
+})();
+</script>
