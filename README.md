@@ -10,7 +10,14 @@
 | โปรแกรมคำนวณ + เก็บข้อมูล | `storage_calc.py`, `run_storage.bat` | อ่านไฟล์ใน `INPUT` → สร้างรายงาน Excel, dashboard และฐานข้อมูล แยกโฟลเดอร์ตามเที่ยวเรือ |
 | แอพบนเว็บ | `storage_app.html` | คำนวณด่วน, คำนวณจากไฟล์, Export Excel, Dashboard รวม (ฐานข้อมูลของแอพ) |
 
-แอพที่เผยแพร่แล้ว: https://claude.ai/artifact/X1NwK1c6Vf26JNXF4vTHkj
+ลิงก์
+
+- หน้าแรก: https://sirichai1265.github.io/hal-storage-calculator/
+- Dashboard รวม: https://sirichai1265.github.io/hal-storage-calculator/DASHBOARD.html
+- แอพ (GitHub Pages): https://sirichai1265.github.io/hal-storage-calculator/storage_app.html
+- แอพ (claude.ai มี Dashboard ฐานข้อมูลร่วม): https://claude.ai/artifact/X1NwK1c6Vf26JNXF4vTHkj
+
+อัปเดต Dashboard ออนไลน์: วางไฟล์ใน `INPUT/` แล้วดับเบิลคลิก `update_dashboard.bat` (คำนวณ + push ขึ้น GitHub)
 
 ## ติดตั้ง
 

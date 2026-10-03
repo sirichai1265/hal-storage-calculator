@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HAL Storage</title>
+<style>
+:root{--bg:#EEF1F3;--surface:#FFFFFF;--ink:#15222B;--muted:#5A6873;--line:#D5DCE1;--head:#1F3A4D;--head-ink:#EAF1F5;--head-muted:#A3B6C3;--accent:#D8812A;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0F161B;--surface:#172229;--ink:#E3EAEE;--muted:#93A3AE;--line:#2A3943;--head:#0B1318;--head-ink:#E3EAEE;--head-muted:#7F95A3;--accent:#E99B4C;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 Tahoma,"Segoe UI",sans-serif}
+header{background:var(--head);color:var(--head-ink);padding:22px 16px}
+.wrap{max-width:860px;margin:0 auto}
+h1{margin:0;font-size:22px}h1 b{color:var(--accent)}
+header p{margin:4px 0 0;color:var(--head-muted)}
+main{padding:22px 16px 40px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+a.card{display:grid;gap:4px;background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--accent);border-radius:8px;padding:16px 18px;color:inherit;text-decoration:none}
+a.card:hover,a.card:focus-visible{border-color:var(--accent);outline:none}
+a.card strong{font-size:16px}a.card span{color:var(--muted)}
+.note{color:var(--muted);font-size:12.5px;margin-top:18px}
+</style>
+</head>
+<body>
+<header><div class="wrap"><h1>HAL <b>Storage</b></h1><p>ค่าฝากตู้ที่ terminal · BKK · UTCT · LCH</p></div></header>
+<main><div class="wrap">
+  <div class="cards">
+    <a class="card" href="DASHBOARD.html"><strong>Dashboard รวม</strong><span>ทุกเที่ยวเรือที่คำนวณแล้ว · ค่า Storage แยกพื้นที่ · รายเที่ยว</span></a>
+    <a class="card" href="storage_app.html"><strong>HAL Storage Calculator</strong><span>คำนวณด่วน · คำนวณจากไฟล์ LOAD / BKG / GATE · Export Excel</span></a>
+    <a class="card" href="DATABASE/STORAGE_DATABASE.xlsx"><strong>ฐานข้อมูล Excel</strong><span>STORAGE_DATABASE.xlsx · ชีท Voyages และ Containers</span></a>
+  </div>
+  <p class="note">อัปเดตเมื่อรัน update_dashboard.bat · ไฟล์ที่ใส่ในแอพถูกอ่านในเครื่องผู้ใช้เท่านั้น</p>
+</div></main>
+</body>
+</html>
