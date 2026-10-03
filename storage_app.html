@@ -582,7 +582,7 @@ function recompute(){
       const size=tpsz.startsWith("22")?"20'":"40'", svc=b[11];
       const etd=toDay(r[1]), din=g?toDay(g[3]):null;
       let ftDefault=ftTerminal(loc,dg,b[84]), ftNote=(ftDefault===0&&CFS_ZERO_FT_LOCS.includes(loc))?"CFS/CY ที่ PAT: F/T 0 วัน":"";
-      if(m.ftOverride!=null){ ftDefault=m.ftOverride; ftNote="กรอกเองในชีท CS"; WARNINGS.push(`${cntr}: ใช้ F/T = ${m.ftOverride} วัน ตามที่กรอกเองในชีท CS`); }
+      if(m.ftOverride!=null&&m.ftOverride!==ftDefault){ WARNINGS.push(`${cntr}: ใช้ F/T = ${m.ftOverride} วัน ตามที่กรอกเองในชีท CS (กฎให้ ${ftDefault} วัน)`); ftDefault=m.ftOverride; ftNote="กรอกเองในชีท CS"; }
       if(m.tml&&m.tml.toUpperCase()==="TML"&&m.spft>0){ ftDefault=m.spft; ftNote="Special F/T (TML)"; }
       const allow=toDay(m.allow);
       const over=(allow!=null&&din!=null)?Math.max(Math.max(allow-din,0)-(m.spft||0),0):0;

@@ -264,10 +264,10 @@ def compute(sources):
             stay = (etd - din).days + 1 if etd and din else None
             ft = ft_terminal(loc, is_dg, b[84])
             note = "CFS/CY ที่ PAT: F/T 0 วัน" if (ft == 0 and loc in CFS_ZERO_FT_LOCS) else None
-            if m.get("ft_override") is not None:
+            if m.get("ft_override") is not None and m["ft_override"] != ft:  # เตือนเฉพาะค่าที่ต่างจากกฎ
+                note = f"F/T {m['ft_override']} วัน ตามที่กรอกในชีท CS (กฎให้ {ft} วัน)"
+                warnings.append(f"{cntr}: ใช้ F/T Terminal = {m['ft_override']} วัน ตามที่กรอกเองในชีท CS (กฎให้ {ft} วัน)")
                 ft = m["ft_override"]
-                note = f"F/T {ft} วัน ตามที่กรอกในชีท CS"
-                warnings.append(f"{cntr}: ใช้ F/T Terminal = {ft} วัน ตามที่กรอกเองในชีท CS")
             sp_ft = m.get("spft") or 0
             tml = m.get("tml") or ""
             ft_used = sp_ft if (str(tml).strip().upper() == "TML" and sp_ft > 0) else ft
