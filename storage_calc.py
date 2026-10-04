@@ -33,6 +33,7 @@ VOY_DIR = os.path.join(BASE, "VOYAGES")
 DB_DIR = os.path.join(BASE, "DATABASE")
 DB_FILE = os.path.join(DB_DIR, "STORAGE_DATABASE.xlsx")
 MASTER_DASH = os.path.join(BASE, "DASHBOARD.html")
+CORRECTIONS_FILE = os.path.join(BASE, "CORRECTIONS.csv")  # แก้ข้อมูลรายตู้ (Container No. + Booking No.)
 
 # ---------------------------------------------------------------- Tariff (ชีท Charge)
 # ขั้นบันได: (วันเริ่ม tier, ยอดสะสม ณ วันเริ่ม, อัตรา/วัน) -> ค่า = สะสม + (วัน - วันเริ่ม) * อัตรา
@@ -227,7 +228,22 @@ def classify(path):
 
 
 # ---------------------------------------------------------------- calculation
+def load_corrections():
+    """CORRECTIONS.csv: Container No.,Booking No.,Location,Remark — แก้ Location ของตู้ใน booking นั้น"""
+    import csv
+    out = {}
+    if os.path.exists(CORRECTIONS_FILE):
+        with open(CORRECTIONS_FILE, encoding="utf-8-sig", newline="") as fh:
+            for row in csv.DictReader(fh):
+                cntr = (row.get("Container No.") or "").strip().upper()
+                bkno = (row.get("Booking No.") or "").strip().upper()
+                if cntr and bkno:
+                    out[(cntr, bkno)] = {k: (v or "").strip() for k, v in row.items() if k}
+    return out
+
+
 def compute(sources):
+    corrections = load_corrections()
     bk, gates = {}, defaultdict(list)
     for si, s in enumerate(sources):
         for r in s["booking"]:
@@ -253,6 +269,11 @@ def compute(sources):
             if g is None:
                 warnings.append(f"{cntr}: ไม่พบวันตู้เข้าในไฟล์ Gate move")
             m = s["manual"].get(cntr, {})
+            fix_note = None
+            fix = corrections.get((str(cntr).upper(), str(bkno or "").upper()))
+            if fix and fix.get("Location") and fix["Location"] != loc:
+                fix_note = f"แก้ Location {loc} → {fix['Location']} (CORRECTIONS.csv{': ' + fix['Remark'] if fix.get('Remark') else ''})"
+                loc = fix["Location"]
 
             group = GROUP_OF_LOC.get(loc, "G2")
             is_dg = b[42] not in (None, "", 0, "0")
@@ -292,7 +313,7 @@ def compute(sources):
                 "Total Storage Charge": charge, "Special F/T": sp_ft or None, "HQ Ref No. / TML / APP BY": tml or None,
                 "Free Time Customer": cft, "คืนก่อนเรือออก": (etd - allow).days + 1 if (etd and allow) else None,
                 "Over F/T Customer": over_c, "Amount due to Customer": cust, "Collection": collect or None,
-                "Amount due to HAL": charge - collect, "Remark": m.get("remark") or note, "SALESNM": b[39],
+                "Amount due to HAL": charge - collect, "Remark": " · ".join(x for x in (m.get("remark"), note, fix_note) if x) or None, "SALESNM": b[39],
                 "CUST ETD": to_date(b[100]), "PICK UP": b[62], "COMMON REMARKS": b[51], "ROLL": b[102],
             }
             key = (etd, svc, b[12] or r[2], b[13] or r[3], b[14] or r[7], b[15] or r[27] or loc)

@@ -48,6 +48,18 @@ DASHBOARD.html                 dashboard รวมทุกเที่ยว
 - รันเที่ยวเดิมซ้ำ → เขียนทับโฟลเดอร์เดิม ฐานข้อมูลไม่ซ้ำ
 - นำ `STORAGE_DATABASE.xlsx` เข้า Dashboard ของแอพได้ (แท็บ Dashboard → นำเข้า)
 
+## แก้ข้อมูลรายตู้ (CORRECTIONS.csv)
+
+ถ้าข้อมูลจากระบบผิด (เช่น Location ใน LOAD ไม่ตรงกับที่ตู้เข้าจริง) ให้เพิ่มแถวใน `CORRECTIONS.csv` แล้วรันเที่ยวนั้นใหม่
+(คัดลอกไฟล์จาก `VOYAGES/<ชื่อเที่ยว>/SOURCE/` กลับไปที่ `INPUT/`)
+
+| Container No. | Booking No. | Location | Remark |
+|---|---|---|---|
+| SKLU1952893 | HASLS22260800402 | LCH04 | ตู้เข้า LCMT จริงตาม GATE และ BKG LWharf |
+
+- ใช้คู่ Container No. + Booking No. จึงไม่กระทบตู้เดียวกันในเที่ยวอื่น
+- ไฟล์ต้นฉบับไม่ถูกแก้ · รายงานบันทึกการแก้ไว้ในคอลัมน์ Remark
+
 ## หลักการคำนวณ
 
 - วันอยู่ใน terminal = ETD − วันตู้เข้า (Gate in) + 1
