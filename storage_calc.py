@@ -836,7 +836,7 @@ def master_dashboard(voyages):
                               f'<span class="track"><span class="seg bar" style="left:0;width:{v[0] / smx * 100:.2f}%"></span></span>'
                               f'<span class="val"><b>{money(v[0])}</b> · {v[1]} ตู้</span></div>' for k, v in top)
                     + "</div></div>")
-    links = '<p class="sub" style="margin-top:14px">ฐานข้อมูล Excel: <a href="DATABASE/STORAGE_DATABASE.xlsx">DATABASE/STORAGE_DATABASE.xlsx</a></p>'
+    links = ''
     body = tiles + links + (chart if voyages else '<p class="sub">ยังไม่มีข้อมูล · วางไฟล์ใน INPUT แล้วรัน run_storage.bat</p>') \
         + (table if voyages else "") + shp_html
     return page("HAL Storage Dashboard", hdr, body)
