@@ -925,6 +925,20 @@ def write_app_docs(out_dir, names=None):
     return done
 
 
+def write_template_js(src=None, dst=None):
+    """python storage_calc.py --template-js → storage_template.js (STORAGE TEMPLATE.XLSX เป็น base64 สำหรับแอพ)
+    รันใหม่ทุกครั้งที่แก้ไฟล์ STORAGE TEMPLATE.XLSX"""
+    import base64
+    src = src or os.path.join(BASE, "STORAGE TEMPLATE.XLSX")
+    dst = dst or os.path.join(BASE, "storage_template.js")
+    with open(src, "rb") as fh:
+        b64 = base64.b64encode(fh.read()).decode()
+    with open(dst, "w", encoding="utf-8") as fh:
+        fh.write("/* สร้างจาก STORAGE TEMPLATE.XLSX ด้วย: python storage_calc.py --template-js */" + chr(10))
+        fh.write('window.STORAGE_TEMPLATE_B64="' + b64 + '";' + chr(10))
+    return dst
+
+
 def main():
     for d in (INPUT_DIR, VOY_DIR, DB_DIR):
         os.makedirs(d, exist_ok=True)
@@ -996,6 +1010,9 @@ def main():
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    if len(sys.argv) > 1 and sys.argv[1] == "--template-js":
+        print(write_template_js())
+        sys.exit(0)
     if len(sys.argv) > 2 and sys.argv[1] == "--app-docs":
         for n in write_app_docs(sys.argv[2], sys.argv[3:] or None):
             print(n)

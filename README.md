@@ -64,7 +64,8 @@ DASHBOARD.html                 dashboard รวมทุกเที่ยว
 
 ปุ่ม **Export ไฟล์สรุป (.xlsx)** สร้างไฟล์ตามแม่แบบ `STORAGE TEMPLATE.XLSX` (ชีท BKK / LCH)
 ตามตัวกรองพื้นที่/เดือนที่เลือก หรือกด Export ท้ายแถวเพื่อออกเฉพาะเที่ยวนั้น
-แท็บ "คำนวณจากไฟล์เรือ" ก็ Export เป็นรูปแบบเดียวกัน (ไฟล์ละ 1 เที่ยว ชื่อ `ETD_SVC_VSL_VOY_POL_LWharf.xlsx`)
+แท็บ **"คำนวณจากไฟล์เรือ"** Export เป็นไฟล์ `STORAGE TEMPLATE.XLSX` ที่เติมข้อมูลเที่ยวนั้นครบทุกชีท (1.Loading · 2.Bookinglist · 3.GateMove · CS · BKK/LCH · Charge) ไฟล์ละ 1 เที่ยว ชื่อ `ETD_SVC_VSL_VOY_POL_LWharf.xlsx`
+- แอพใช้ `storage_template.js` (template แบบ base64) + `storage_template_fill.js` — **แก้ template แล้วต้องรัน** `python storage_calc.py --template-js` และ publish/push ใหม่
 
 - ชีท **BKK** = เที่ยว BKK + UTCT · ชีท **LCH** = เที่ยว LCH
 - 23 คอลัมน์ Container No. → SALESNM · แถว 2 = ผลรวม TTL Storage / CUSTOMER PAY / HAL PAY (สูตร SUM)

@@ -679,7 +679,7 @@ function renderResults(){
     <div class="tools"><span class="total-note" id="x-status" aria-live="polite"></span><button class="btn" type="button" id="s-all" ${DB?"":"hidden"}>บันทึกทั้งหมดเข้า Dashboard</button><button class="btn primary" type="button" id="x-all">Export ทั้งหมด (.xlsx)</button></div>
   </div>
   <div class="scroll"><table class="grid"><thead><tr><th>พื้นที่</th><th>ETD</th><th>SVC</th><th>VSL / VOY</th><th>POL</th><th>LWharf</th><th class="r">ตู้</th><th class="r">20'</th><th class="r">40'</th><th class="r">เกิน F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th><th class="r">เก็บลูกค้า</th><th class="r">HAL จ่าย</th><th>ไฟล์</th></tr></thead><tbody>${vt}</tbody></table></div>
-  <p class="total-note" style="margin-top:8px">Export เป็นไฟล์รูปแบบ STORAGE TEMPLATE (ชีท BKK / LCH) · ชื่อไฟล์ = ETD_SVC_VSL_VOY_POL_LWharf เช่น <span class="mono">${esc(exportName(voyageSets()[0].rows[0]))}</span></p>
+  <p class="total-note" style="margin-top:8px">Export = ไฟล์ STORAGE TEMPLATE ที่เติมข้อมูลครบทุกชีท (1.Loading · 2.Bookinglist · 3.GateMove · CS · BKK/LCH · Charge) · ชื่อไฟล์ = ETD_SVC_VSL_VOY_POL_LWharf เช่น <span class="mono">${esc(exportName(voyageSets()[0].rows[0]))}</span></p>
   <div class="section-h"><h2>รายตู้</h2>
     <div class="tools">
       <div class="filt" role="group" aria-label="กรองพื้นที่">${["ALL",...areas].map(a=>`<button type="button" data-a="${a}" aria-pressed="${AREA_FILTER===a}">${a==="ALL"?"ทั้งหมด":a}</button>`).join("")}</div>
@@ -746,14 +746,38 @@ async function getDownloads(){
   try{ DL_NS = window.claude?.use ? await window.claude.use("downloads") : null; }catch(e){ DL_NS=null; }
   return DL_NS;
 }
+// Export จากแท็บไฟล์ = ไฟล์ STORAGE TEMPLATE.XLSX ที่เติมข้อมูลเที่ยวนั้นครบทุกชีท
+// (ExcelJS + JSZip + storage_template.js โหลดเมื่อกด Export ครั้งแรก)
+const CDN_EXCELJS="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
+const CDN_JSZIP="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+let TPL_LIBS=null;
+const loadScript=src=>new Promise((res,rej)=>{ const el=document.createElement("script"); el.src=src; el.onload=res; el.onerror=()=>rej(new Error(src)); document.head.appendChild(el); });
+function ensureTemplateLibs(){
+  if(!TPL_LIBS) TPL_LIBS=Promise.all([window.ExcelJS||loadScript(CDN_EXCELJS),window.JSZip||loadScript(CDN_JSZIP),
+    window.STORAGE_TEMPLATE_B64||loadScript("storage_template.js"),window.fillStorageTemplate||loadScript("storage_template_fill.js")])
+    .catch(e=>{ TPL_LIBS=null; throw e; });
+  return TPL_LIBS;
+}
+function b64Bytes(b64){ const bin=atob(b64), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; }
+async function templateBytes(set){
+  await ensureTemplateLibs();
+  return window.fillStorageTemplate(window.ExcelJS,window.JSZip,b64Bytes(window.STORAGE_TEMPLATE_B64),set);
+}
+function saveLocal(bytes,name){   // opened as a local file / GitHub Pages
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+}
 async function exportSets(sets){
   const st=$("x-status"); if(!sets.length) return;
   const inViewer=!!window.claude?.use;
   const dl=inViewer ? await getDownloads() : null;
   let ok=0, last="";
+  st.textContent="กำลังสร้างไฟล์จาก STORAGE TEMPLATE…";
   for(const set of sets){
     const name=exportName(set.rows[0]);
-    const buf=XLSX.write(summaryWorkbook([voyageDoc(set)]),{bookType:"xlsx",type:"array"});
+    let buf;
+    try{ buf=await templateBytes(set); }
+    catch(e){ st.textContent="โหลด STORAGE TEMPLATE ไม่สำเร็จ ตรวจการเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง"; return; }
     if(dl){
       try{ await dl.save({filename:name,data:new Blob([buf])}); ok++; last=name; }
       catch(e){
@@ -763,7 +787,7 @@ async function exportSets(sets){
         st.textContent="หน้านี้บันทึกไฟล์ไม่ได้ ลองเปิดแอพจากไฟล์ storage_app.html ในเครื่อง"; return;
       }
     } else if(!inViewer){
-      XLSX.writeFile(summaryWorkbook([voyageDoc(set)]),name); ok++; last=name;   // opened as a local file
+      saveLocal(buf,name); ok++; last=name;
     } else { st.textContent="หน้านี้บันทึกไฟล์ไม่ได้ ลองเปิดแอพจากไฟล์ storage_app.html ในเครื่อง"; return; }
   }
   if(ok) st.textContent = ok===1 ? `บันทึกแล้ว: ${last}` : `บันทึกแล้ว ${ok} ไฟล์`;
