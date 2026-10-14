@@ -821,16 +821,10 @@ function copyTable(){
 // เก็บ 1 เอกสารต่อเที่ยวเรือใน collection "voyages" : {meta, sum, rows}
 let DB=null, DBV=[], DB_STATE="loading", CAN_WRITE=true;
 const FIXES=new Map();
-let GH=null;                // collection "sync_status" doc "github": งานซิงก์อัตโนมัติขึ้น GitHub Dashboard (ทุก 5 นาที)
-const hhmm=t=>{ const d=new Date(t); return isNaN(d)?"":d.toLocaleString("th-TH",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); };
-function ghPending(){ const at=GH&&Date.parse(GH.at); return DBV.filter(v=>v.meta&&v.meta.via==="app"&&(!at||Date.parse(v.meta.savedAt)>at)); }
 function renderGh(){
   const el=document.getElementById("d-gh"); if(!el) return;
-  if(DB_STATE!=="ok"){ el.hidden=true; return; }
-  const pend=ghPending(); el.hidden=false;
-  if(GH&&GH.status==="error"&&pend.length){ el.className="total-note gh err"; el.textContent=`⚠ GitHub Dashboard ซิงก์ไม่สำเร็จ ${hhmm(GH.at)}: ${GH.message||""}`; }
-  else if(pend.length){ el.className="total-note gh wait"; el.textContent=`⏳ GitHub Dashboard: รอซิงก์ ${pend.length} เที่ยว (ภายใน ~5 นาที)`; }
-  else { el.className="total-note gh ok"; el.textContent=GH?`✓ GitHub Dashboard ซิงก์ล่าสุด ${hhmm(GH.at)}`:"GitHub Dashboard"; }
+  el.hidden=DB_STATE!=="ok"; el.className="total-note gh"; el.textContent="GitHub Dashboard ↗";
+  el.title="อัปเดตเมื่อบันทึกไฟล์ STORAGE TEMPLATE จากแอพ (โปรแกรม storage_watch.py ในเครื่องซิงก์ให้)";
 }      // collection "corrections": <cntr>__<bkno> → {cntr,bkno,loc,remark} (ตรงกับ CORRECTIONS.csv)
 let D_AREA="ALL", D_MONTH="ALL", D_OPEN=null, D_CONFIRM=null;
 const LOC_NAME = code => (LOCS.find(l=>l.code===code)||{}).name || code || "";
@@ -869,7 +863,16 @@ async function autoSave(){
   const note=skipped?` · ไม่ได้บันทึก ${skipped} เที่ยว (ข้อมูลไม่ครบ)`:"";
   if(!changed.length){ if(ready.length) st.textContent=`✓ Dashboard ตรงกับไฟล์แล้ว${note}`; else if(skipped) st.textContent=`ยังไม่บันทึกเข้า Dashboard: ข้อมูลไม่ครบ (ต้องมี LOAD / BKG / GATE)`; return; }
   AUTO_BUSY=true; st.textContent="กำลังอัปเดต Dashboard…";
-  try{ await saveSets(changed,true); if(note) st.textContent+=note; } finally{ AUTO_BUSY=false; }
+  try{
+    await saveSets(changed,true);
+    const saved=st.textContent;
+    // บันทึกไฟล์ STORAGE TEMPLATE (กด Save 1 ครั้ง) → โปรแกรม storage_watch.py ในเครื่องซิงก์ขึ้น GitHub Dashboard ให้
+    await exportSets(changed);
+    const r=st.textContent;
+    st.textContent = /บันทึกแล้ว/.test(r) ? `${saved.split(" · ")[0]} · บันทึกไฟล์แล้ว → GitHub Dashboard จะอัปเดตใน ~1 นาที${note}`
+      : /ยกเลิก/.test(r) ? `${saved.split(" · ")[0]} · ยังไม่ได้บันทึกไฟล์ GitHub Dashboard จึงยังไม่อัปเดต (กด Export เพื่อบันทึกไฟล์)${note}`
+      : `${saved.split(" · ")[0]} · ${r}${note}`;
+  } finally{ AUTO_BUSY=false; }
 }
 async function saveSets(sets,auto){
   const st=$("x-status"); if(!DB||!sets.length) return;
@@ -887,7 +890,7 @@ async function saveSets(sets,auto){
     }
   }
   const what = ok===1 ? voyageDoc(sets[0]).meta.name : `${ok} เที่ยว`;
-  st.textContent = (auto ? `✓ อัปเดต Dashboard อัตโนมัติแล้ว: ${what}` : `บันทึกเข้า Dashboard แล้ว: ${what}`) + " · GitHub Dashboard จะอัปเดตภายใน ~5 นาที";
+  st.textContent = auto ? `✓ อัปเดต Dashboard อัตโนมัติแล้ว: ${what}` : `บันทึกเข้า Dashboard แล้ว: ${what}`;
 }
 function refreshSaveLabels(){
   document.querySelectorAll(".sbtn").forEach(b=>{
@@ -903,7 +906,6 @@ function refreshSaveLabels(){
   if(!DB){ DB_STATE="off"; renderDash(); return; }
   try{ const u=await window.claude.use("user"); if(u){ const c=await u.can("data.write"); if(c===false) CAN_WRITE=false; } }catch(e){}
   $("d-import-lbl").hidden=!CAN_WRITE;
-  DB.collection("sync_status").doc("github").onSnapshot(snap=>{ GH=snap.exists?snap.data():null; renderGh(); }, ()=>{});
   DB.collection("corrections").onSnapshot(snap=>{
     FIXES.clear();
     snap.docs.forEach(d=>{ const x=d.data()||{}; if(x.cntr&&x.bkno) FIXES.set(`${String(x.cntr).toUpperCase()}|${String(x.bkno).toUpperCase()}`,x); });

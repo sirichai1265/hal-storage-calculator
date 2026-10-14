@@ -2,3 +2,5 @@
 __pycache__/
 ~$*
 *.tmp
+.watch_state.json
+watch.log

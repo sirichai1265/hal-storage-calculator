@@ -80,11 +80,15 @@ DASHBOARD.html                 dashboard รวมทุกเที่ยว
 
 ## อัปเดตอัตโนมัติจาก HAL Storage Calculator
 
-- ใส่ไฟล์ LOAD / BKG / GATE ในแท็บ "คำนวณจากไฟล์เรือ" → แอพบันทึกเข้า Dashboard ของแอพ**อัตโนมัติ** เมื่อข้อมูลครบ
-  (ไม่ต้องกดปุ่ม · แก้ F/T ในตารางก็อัปเดตให้ · เที่ยวที่ข้อมูลไม่ครบจะไม่ถูกบันทึก · ข้อมูลเหมือนเดิมจะไม่เขียนซ้ำ)
+1. ใส่ไฟล์ LOAD / BKG / GATE ในแท็บ "คำนวณจากไฟล์เรือ" → แอพบันทึกเข้า Dashboard ของแอพ**อัตโนมัติ** เมื่อข้อมูลครบ
+   (แก้ F/T ในตารางก็อัปเดตให้ · เที่ยวที่ข้อมูลไม่ครบจะไม่ถูกบันทึก · ข้อมูลเหมือนเดิมจะไม่บันทึกซ้ำ)
+2. แอพเปิดหน้าต่างบันทึกไฟล์ STORAGE TEMPLATE ของเที่ยวนั้น → **กด Save 1 ครั้ง** (ที่ Desktop หรือ Downloads)
+3. `storage_watch.py` ที่รันอยู่ในเครื่องเห็นไฟล์ → คำนวณ → git commit + push → **HAL Storage Dashboard บน GitHub อัปเดตใน ~1 นาที**
+   - ซิงก์**เฉพาะเมื่อข้อมูลเปลี่ยน** (Export ไฟล์เดิมซ้ำ = ไม่ทำอะไร) · ไม่ใช้ Claude · บันทึกที่ `watch.log`
+   - เริ่มเองตอนเปิดเครื่อง: `HAL Storage Sync.vbs` ในโฟลเดอร์ Startup ของ Windows (สำเนาอยู่ใน repo)
+   - แก้ `storage_calc.py` แล้วให้รีสตาร์ต: ปิด pythonw ที่รัน storage_watch.py แล้วดับเบิลคลิก `HAL Storage Sync.vbs`
 - CORRECTIONS ใช้ในแอพด้วย (collection `corrections` ในฐานข้อมูลแอพ ต้องตรงกับ `CORRECTIONS.csv`)
-- นำเที่ยวที่บันทึกจากแอพเข้าระบบ (VOYAGES / DATABASE / Dashboard บน GitHub):
-  ดาวน์โหลด collection `voyage_raw` ของเที่ยวนั้น แล้ว `python storage_calc.py --import-app <โฟลเดอร์>` และ push
+- นำเที่ยวจากฐานข้อมูลแอพเข้าระบบด้วยมือ: ดาวน์โหลด collection `voyage_raw` แล้ว `python storage_calc.py --import-app <โฟลเดอร์>`
 
 ## หลักการคำนวณ
 
