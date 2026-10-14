@@ -60,6 +60,17 @@ DASHBOARD.html                 dashboard รวมทุกเที่ยว
 - ใช้คู่ Container No. + Booking No. จึงไม่กระทบตู้เดียวกันในเที่ยวอื่น
 - ไฟล์ต้นฉบับไม่ถูกแก้ · รายงานบันทึกการแก้ไว้ในคอลัมน์ Remark
 
+## Export ไฟล์สรุป (แท็บ Dashboard ในแอพ)
+
+ปุ่ม **Export ไฟล์สรุป (.xlsx)** สร้างไฟล์ตามแม่แบบ `STORAGE TEMPLATE.XLSX` (ชีท BKK / LCH)
+ตามตัวกรองพื้นที่/เดือนที่เลือก หรือกด Export ท้ายแถวเพื่อออกเฉพาะเที่ยวนั้น
+
+- ชีท **BKK** = เที่ยว BKK + UTCT · ชีท **LCH** = เที่ยว LCH
+- 23 คอลัมน์ Container No. → SALESNM · แถว 2 = ผลรวม TTL Storage / CUSTOMER PAY / HAL PAY (สูตร SUM)
+- ค่าแต่ละคอลัมน์ใส่ตามชื่อหัวคอลัมน์ (ATD / Date Out = ETD)
+
+ข้อมูลสำหรับฐานข้อมูลแอพ: `python storage_calc.py --app-docs <โฟลเดอร์> [ชื่อเที่ยว ...]` → ไฟล์ JSON ต่อเที่ยว
+
 ## หลักการคำนวณ
 
 - วันอยู่ใน terminal = ETD − วันตู้เข้า (Gate in) + 1

@@ -871,6 +871,38 @@ def move_sources(paths, dests):
 
 
 # ---------------------------------------------------------------- main
+def app_doc(v):
+    """เอกสาร 1 เที่ยวสำหรับฐานข้อมูลของแอพ (collection "voyages") — ฟิลด์ครบสำหรับ Export ไฟล์สรุปแบบ STORAGE TEMPLATE"""
+    m, cs = v["meta"], v["rows"]
+    d = lambda x: x.isoformat()[:10] if isinstance(x, (date, datetime)) else x
+    rows = [{"cntr": c["Container No."], "bkno": c["Booking No."] or "", "shipper": c["Shipper"] or "",
+             "tpsz": c["Type Size"], "loc": c["Location"] or "", "dg": bool(c["DG"]), "rf": bool(c["RF"]),
+             "din": d(c["Date In"]), "stay": c["Total Stay"], "ft": c["Normal F/T Terminal"],
+             "days": c["Total Storage Days"], "charge": c["Total Storage Charge"], "cust": c["Amount due to Customer"],
+             "pol": c["POL"] or "", "pod": c["POD"] or "", "orig": d(c["Original Schedule"]),
+             "cft": c["Free Time Customer"], "hal": c["Amount due to HAL"], "remark": c["Remark"] or "",
+             "sales": c["SALESNM"] or ""} for c in cs]
+    s = summarize(cs)
+    s.pop("collect", None)
+    s["collect"] = sum(c["Collection"] or 0 for c in cs)
+    meta = {k: m[k] for k in ("name", "etd", "svc", "vsl", "voy", "pol", "lwharf", "area", "group", "terminal", "sources")}
+    meta.update(savedAt=datetime.now().astimezone().isoformat(), via="run_storage")
+    return {"meta": meta, "sum": s, "rows": rows}
+
+
+def write_app_docs(out_dir, names=None):
+    """python storage_calc.py --app-docs <โฟลเดอร์> [ชื่อเที่ยว ...] → <ชื่อเที่ยว>.json สำหรับ ArtifactData"""
+    os.makedirs(out_dir, exist_ok=True)
+    done = []
+    for v in load_voyages():
+        if names and v["meta"]["name"] not in names:
+            continue
+        with open(os.path.join(out_dir, v["meta"]["name"] + ".json"), "w", encoding="utf-8") as fh:
+            json.dump(app_doc(v), fh, ensure_ascii=False, default=str)
+        done.append(v["meta"]["name"])
+    return done
+
+
 def main():
     for d in (INPUT_DIR, VOY_DIR, DB_DIR):
         os.makedirs(d, exist_ok=True)
@@ -941,4 +973,8 @@ def main():
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    if len(sys.argv) > 2 and sys.argv[1] == "--app-docs":
+        for n in write_app_docs(sys.argv[2], sys.argv[3:] or None):
+            print(n)
+        sys.exit(0)
     sys.exit(main())

@@ -310,6 +310,7 @@ tr.detail .scroll{max-height:420px;overflow:auto}
     <select id="d-month" aria-label="เดือนของ ETD"></select>
     <span class="total-note" id="d-status" aria-live="polite"></span>
     <span class="spacer"></span>
+    <button class="btn primary" type="button" id="d-export" title="ไฟล์สรุปแบบ STORAGE TEMPLATE (ชีท BKK / LCH) ตามตัวกรองที่เลือก">Export ไฟล์สรุป (.xlsx)</button>
     <label class="btn" for="d-import" id="d-import-lbl">นำเข้า STORAGE_DATABASE.xlsx</label>
     <input type="file" id="d-import" accept=".xlsx" hidden>
   </div>
@@ -854,7 +855,9 @@ function voyageDoc(set){
     sum:{n:s.n,c20:s.c20,c40:s.c40,dg:set.rows.filter(r=>r.dg).length,rf:set.rows.filter(r=>r.rf).length,
       over:s.over,days:s.days,charge:s.charge,cust:s.cust,collect:set.rows.reduce((t,r)=>t+r.collect,0),hal:s.hal},
     rows:set.rows.map(r=>({cntr:r.cntr,bkno:r.bkno||"",shipper:r.shipper||"",tpsz:r.tpsz,loc:r.loc||"",dg:!!r.dg,rf:!!r.rf,
-      din:r.din!=null?isoDay(r.din):null,stay:r.stay,ft:r.ft,days:r.days,charge:r.charge,cust:r.custAmt}))
+      din:r.din!=null?isoDay(r.din):null,stay:r.stay,ft:r.ft,days:r.days,charge:r.charge,cust:r.custAmt,
+      pol:r._b[14]||r._r[7]||"",pod:r._b[18]||r._r[8]||"",orig:null,cft:r.custFt,hal:r.charge-r.collect,
+      remark:r.ftOverride!=null?`F/T แก้ในแอพ (เดิม ${r.ftDefault})`:(r.ftNote||""),sales:r._b[39]||""}))
   };
 }
 
@@ -922,8 +925,9 @@ function renderDash(){
       <p>ไปที่แท็บ "คำนวณจากไฟล์เรือ" ใส่ไฟล์ LOAD / BKG / GATE แล้วกด "บันทึกเข้า Dashboard"${DB_STATE==="ok"&&CAN_WRITE?" หรือนำเข้าไฟล์ DATABASE/STORAGE_DATABASE.xlsx ที่ได้จาก run_storage.bat":""}</p></div>`;
     return;
   }
-  const vs=all.filter(v=>(D_AREA==="ALL"||v.meta.area===D_AREA)&&(D_MONTH==="ALL"||monthOf(v)===D_MONTH))
-              .sort((a,b)=>(etdDay(b)??0)-(etdDay(a)??0)||a.meta.name.localeCompare(b.meta.name));
+  const vs=dashFiltered(all);
+  $("d-export").disabled=!vs.length;
+  $("d-export").onclick=()=>exportSummary(vs,`STORAGE SUMMARY_${D_AREA==="ALL"?"ALL":D_AREA}_${D_MONTH==="ALL"?"ALL":D_MONTH}_${isoDay(Math.floor(Date.now()/DAY))}.xlsx`);
   const t=sumOf(vs);
   const scope=all.filter(v=>D_MONTH==="ALL"||monthOf(v)===D_MONTH);
   const tiles=["BKK","UTCT","LCH"].map(a=>{ const s=sumOf(scope.filter(v=>v.meta.area===a));
@@ -952,7 +956,7 @@ function renderDash(){
       <td class="num">${fmtDay(etdDay(v))}</td><td>${esc(v.meta.area)}</td><td>${esc(v.meta.terminal)}</td>
       <td class="r num">${v.sum.n}</td><td class="r num">${v.sum.over}</td><td class="r num">${v.sum.days}</td>
       <td class="r num amt">${money(v.sum.charge||0)}</td><td class="r num">${money(v.sum.cust||0)}</td><td class="r num">${money(v.sum.hal||0)}</td>
-      <td>${canDel?`<button class="btn sm ${D_CONFIRM===id?"danger":""}" type="button" data-del="${esc(id)}">${D_CONFIRM===id?"ยืนยันลบ":"ลบ"}</button>`:""}</td></tr>`;
+      <td style="display:flex;gap:6px"><button class="btn sm" type="button" data-xs="${esc(id)}" title="Export ไฟล์สรุปของเที่ยวนี้">Export</button>${canDel?`<button class="btn sm ${D_CONFIRM===id?"danger":""}" type="button" data-del="${esc(id)}">${D_CONFIRM===id?"ยืนยันลบ":"ลบ"}</button>`:""}</td></tr>`;
     if(open){
       const rs=[...(v.rows||[])].sort((a,b)=>b.charge-a.charge||String(a.cntr).localeCompare(b.cntr));
       html+=`<tr class="detail"><td colspan="11"><div class="scroll"><table class="grid"><thead><tr><th>Container</th><th>Loc</th><th>Booking</th><th>Shipper</th><th>Type</th><th></th><th>ตู้เข้า</th><th class="r">อยู่</th><th class="r">F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th></tr></thead><tbody>`
@@ -972,6 +976,7 @@ function renderDash(){
     <div class="scroll"><table class="grid"><thead><tr><th>ETD_SVC_VSL_VOY_POL_LWharf</th><th>ETD</th><th>พื้นที่</th><th>Terminal</th><th class="r">ตู้</th><th class="r">เกิน F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th><th class="r">เก็บลูกค้า</th><th class="r">HAL จ่าย</th><th></th></tr></thead>
     <tbody>${trs}</tbody><tfoot><tr><td colspan="4">รวม ${vs.length} เที่ยว</td><td class="r num">${t.n||0}</td><td class="r num">${t.over||0}</td><td class="r num">${t.days||0}</td><td class="r num">${money(t.charge||0)}</td><td class="r num">${money(t.cust||0)}</td><td class="r num">${money(t.hal||0)}</td><td></td></tr></tfoot></table></div>`;
 
+  out.querySelectorAll("[data-xs]").forEach(b=>b.onclick=()=>{ const v=vs.find(x=>docId(x.meta.name)===b.dataset.xs); if(v) exportSummary([v],`STORAGE SUMMARY_${v.meta.name}.xlsx`); });
   out.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>{ D_OPEN = D_OPEN===b.dataset.open ? null : b.dataset.open; renderDash(); });
   out.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
     const id=b.dataset.del;
@@ -980,6 +985,65 @@ function renderDash(){
     try{ await DB.collection("voyages").doc(id).delete(); $("d-status").textContent="ลบแล้ว"; }
     catch(e){ $("d-status").textContent="ลบไม่สำเร็จ ลองอีกครั้ง"; renderDash(); }
   });
+}
+
+
+/* ------------------------------------------------------------------ summary export (STORAGE TEMPLATE layout) */
+const dashFiltered = all => all.filter(v=>(D_AREA==="ALL"||v.meta.area===D_AREA)&&(D_MONTH==="ALL"||monthOf(v)===D_MONTH))
+  .sort((a,b)=>(etdDay(b)??0)-(etdDay(a)??0)||a.meta.name.localeCompare(b.meta.name));
+// header, fill (template colour), width, wrap
+const SUM_COLS=[["Container No.","D3D3D3",12.25],["Location","D3D3D3",6.75],["Booking No.","D3D3D3",16.375],["Shipper","D3D3D3",29.75],
+  ["POL","D3D3D3",6],["POD","D3D3D3",13],["Type Size","D3D3D3",13,1],["Vessel","D3D3D3",5.25],["Voyage","D3D3D3",13],
+  ["Original Schedule","92D050",10.875,1],["ATD","92D050",10.125],["Vssl Delay","92D050",6,1],["Date In",null,10.375],["Date Out",null,13],
+  ["Total Stay",null,7.875,1],["CONTRACT F/T ",null,12.625,1],["Over Days",null,12.125,1],["TTL Storage","FFFF00",14.375,1],
+  ["Free Time Customer",null,9.875,1],["CUSTOMER PAY","FFFF00",12.75,1],["HAL PAY","FFFF00",12.75,1],["Remark",null,27.375],["SALESNM",null,21.625]];
+const XL_T={style:"thin",color:{rgb:"000000"}}, XL_BOX={top:XL_T,bottom:XL_T,left:XL_T,right:XL_T};
+const ACC='_-* #,##0_-;\\-* #,##0_-;_-* "-"??_-;_-@_-';
+function summarySheet(voyages){
+  const ser=d=>d==null?null:d+25569;
+  const rows=[];
+  [...voyages].sort((a,b)=>(etdDay(a)??0)-(etdDay(b)??0)||a.meta.name.localeCompare(b.meta.name)).forEach(v=>{
+    const etd=etdDay(v);
+    [...(v.rows||[])].sort((a,b)=>String(a.cntr).localeCompare(b.cntr)).forEach(r=>{
+      const orig=r.orig?dayFromISO(r.orig):null, din=r.din?dayFromISO(r.din):null;
+      rows.push([r.cntr,r.loc,r.bkno,r.shipper,r.pol??"",r.pod??"",r.tpsz,v.meta.vsl,v.meta.voy,ser(orig),ser(etd),
+        (orig!=null&&etd!=null)?etd-orig:null,ser(din),ser(etd),r.stay,r.ft,r.days,r.charge,r.cft??null,r.cust??0,
+        r.hal??r.charge,r.remark??"",r.sales??""]);
+    });
+  });
+  const last=Math.max(4,rows.length+3);
+  const aoa=[[],[...Array(17).fill(null),{f:`SUM(R4:R${last})`},"=",{f:`SUM(T4:T${last})`},{f:`SUM(U4:U${last})`}],SUM_COLS.map(c=>c[0]),...rows];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  // totals row 2 (Tahoma 10 bold, accounting) — cached values so the file opens with numbers
+  [[17,"R"],[19,"T"],[20,"U"]].forEach(([ci,col])=>{ const a=`${col}2`;
+    ws[a]={t:"n",f:`SUM(${col}4:${col}${last})`,v:rows.reduce((t,r)=>t+(+r[ci]||0),0),z:ACC,
+      s:{font:{name:"Tahoma",sz:10,bold:true},alignment:{vertical:"center"}}}; });
+  ws.S2={t:"s",v:"=",s:{font:{name:"Tahoma",sz:8},alignment:{horizontal:"center",vertical:"center"}}};
+  SUM_COLS.forEach(([h,fill,w,wrap],c)=>{ const a=XLSX.utils.encode_cell({r:2,c});
+    ws[a].s={font:{name:"Tahoma",sz:8},border:XL_BOX,alignment:{horizontal:"center",vertical:"center",wrapText:!!wrap},...(fill?{fill:{fgColor:{rgb:fill}}}:{})}; });
+  const DATEC=[9,10,12,13], MONEYC=[17,19,20];
+  rows.forEach((row,i)=>row.forEach((v,c)=>{ const a=XLSX.utils.encode_cell({r:i+3,c});
+    if(!ws[a]) ws[a]={t:"s",v:""};
+    ws[a].s={font:{name:"Tahoma",sz:8},border:XL_BOX,alignment:{horizontal:c===0||c===3||c===21||c===22?"left":"center",vertical:"center"}};
+    if(DATEC.includes(c)&&typeof v==="number") ws[a].z="dd/mm/yyyy";
+    if(MONEYC.includes(c)&&typeof v==="number") ws[a].z="#,##0";
+  }));
+  ws["!cols"]=SUM_COLS.map(c=>({wch:c[2]}));
+  ws["!rows"]=[{hpt:27},{hpt:27.75},{hpt:35.25},...rows.map(()=>({hpt:16.5}))];
+  ws["!ref"]=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(3,rows.length+2),c:SUM_COLS.length-1}});
+  return ws;
+}
+async function exportSummary(voyages,filename){
+  const st=$("d-status"); if(!voyages.length) return;
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,summarySheet(voyages.filter(v=>v.meta.area!=="LCH")),"BKK");   // BKK + UTCT
+  XLSX.utils.book_append_sheet(wb,summarySheet(voyages.filter(v=>v.meta.area==="LCH")),"LCH");
+  const name=filename.replace(/[\\/:*?"<>|]+/g,"-");
+  if(!(window.claude&&window.claude.use)){ XLSX.writeFile(wb,name); st.textContent=`บันทึกแล้ว: ${name}`; return; }
+  const dl=await getDownloads();
+  if(!dl){ st.textContent="หน้านี้บันทึกไฟล์ไม่ได้ ลองเปิดแอพจากไฟล์ storage_app.html ในเครื่อง"; return; }
+  try{ await dl.save({filename:name,data:new Blob([XLSX.write(wb,{bookType:"xlsx",type:"array"})])}); st.textContent=`บันทึกแล้ว: ${name}`; }
+  catch(e){ st.textContent = e&&e.code==="declined" ? "ยกเลิกการบันทึก" : e&&e.code==="rate_limited" ? "มีหน้าต่างบันทึกเปิดค้างอยู่ ลองอีกครั้ง" : "บันทึกไฟล์ไม่สำเร็จ"; }
 }
 
 // import DATABASE/STORAGE_DATABASE.xlsx (from run_storage.bat) into the shared database
@@ -996,7 +1060,9 @@ $("d-import").addEventListener("change",async e=>{
     for(const v of V){
       const rs=C.filter(c=>(c["Voyage Key"]??c.Voyage)===v.Voyage).map(c=>({cntr:c["Container No."],bkno:c["Booking No."]||"",shipper:c.Shipper||"",tpsz:c["Type Size"]||"",
         loc:c.Location||"",dg:!!c.DG,rf:!!c.RF,din:iso(c["Date In"]),stay:c["Total Stay"],ft:c["Normal F/T Terminal"],
-        days:c["Total Storage Days"]||0,charge:c["Total Storage Charge"]||0,cust:c["Amount due to Customer"]||0,collect:c.Collection||0,size:c.Size}));
+        days:c["Total Storage Days"]||0,charge:c["Total Storage Charge"]||0,cust:c["Amount due to Customer"]||0,collect:c.Collection||0,size:c.Size,
+        pol:c.POL||"",pod:c.POD||"",orig:iso(c["Original Schedule"]),cft:c["Free Time Customer"]??null,hal:c["Amount due to HAL"]??null,
+        remark:c.Remark||"",sales:c.SALESNM||""}));
       const sum={n:rs.length,c20:rs.filter(r=>r.size==="20'").length,c40:rs.filter(r=>r.size==="40'").length,dg:rs.filter(r=>r.dg).length,rf:rs.filter(r=>r.rf).length,
         over:rs.filter(r=>r.days>0).length,days:rs.reduce((t,r)=>t+r.days,0),charge:rs.reduce((t,r)=>t+r.charge,0),cust:rs.reduce((t,r)=>t+r.cust,0),
         collect:rs.reduce((t,r)=>t+r.collect,0)}; sum.hal=sum.charge-sum.collect;
