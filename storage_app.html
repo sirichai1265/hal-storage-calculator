@@ -520,14 +520,26 @@ const KIND_LABEL={LOAD:"Loading",BKG:"Booking",GATE:"Gate move",TEMPLATE:"Templa
 function sheetRows(wb,name){ return XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null}); }
 const clean = rows => rows.filter(r=>r&&r[0]!=null&&String(r[0]).trim()!=="");
 
+// BKG รุ่นใหม่ (104 คอลัมน์): ลบ BN "Roll Over" และย้าย BP "Roll Over Remark" ไปต่อท้าย (หลัง CZ) ให้เป็นรูปแบบเดิม 103 คอลัมน์
+function normalizeBkg(head,rows){
+  const h=(head||[]).map(v=>String(v??"").trim());
+  const iRo=h.indexOf("Roll Over");
+  if(iRo<0) return {head,rows,changed:false};
+  let last=h.length; while(last>0&&!h[last-1]) last--;
+  const iRr=h.indexOf("Roll Over Remark");
+  const fix=r=>{ const a=Array.from({length:last},(_,j)=>r[j]??null);
+    return a.filter((_,j)=>j!==iRo&&j!==iRr).concat(iRr>=0?[a[iRr]]:[]); };
+  return {head:fix(head),rows:rows.map(fix),changed:true};
+}
 function classify(wb,name){
   const src={name,kind:null,loading:[],booking:[],gate:[],manual:{},info:""};
   if(["1.Loading","2.Bookinglist","3.GateMove"].every(s=>wb.SheetNames.includes(s))){
     src.kind="TEMPLATE";
     src.loading=clean(sheetRows(wb,"1.Loading").slice(1));
-    src.booking=clean(sheetRows(wb,"2.Bookinglist").slice(1));
+    const nb=normalizeBkg(sheetRows(wb,"2.Bookinglist")[0]||[],clean(sheetRows(wb,"2.Bookinglist").slice(1)));
+    src.booking=nb.rows; src.bkgNormalized=nb.changed;
     src.gate=clean(sheetRows(wb,"3.GateMove").slice(1));
-    BKG_HEAD=(sheetRows(wb,"2.Bookinglist")[0]||[]).filter(v=>v!=null); GATE_HEAD=sheetRows(wb,"3.GateMove")[0]||GATE_HEAD;
+    BKG_HEAD=(nb.head||[]).filter(v=>v!=null); GATE_HEAD=sheetRows(wb,"3.GateMove")[0]||GATE_HEAD;
     if(wb.SheetNames.includes("CS")){
       const ws=wb.Sheets["CS"], cs=sheetRows(wb,"CS");
       for(let i=2;i<cs.length;i++){ const r=cs[i]; if(!r||!r[0]) continue;
@@ -547,7 +559,7 @@ function classify(wb,name){
         else if(hdr[0]==="Container No"&&hdr.includes("GateDate")) kind="GATE";
         if(kind){
           src.kind=kind; const data=clean(rows.slice(h+1));
-          if(kind==="LOAD") src.loading=data; else if(kind==="BKG"){ src.booking=data; BKG_HEAD=rows[h]; } else { src.gate=data; GATE_HEAD=rows[h]; }
+          if(kind==="LOAD") src.loading=data; else if(kind==="BKG"){ const nb=normalizeBkg(rows[h],data); src.booking=nb.rows; src.bkgNormalized=nb.changed; BKG_HEAD=nb.head; } else { src.gate=data; GATE_HEAD=rows[h]; }
           break;
         }
       }
@@ -559,7 +571,7 @@ function classify(wb,name){
     const full=src.loading.filter(r=>r[10]==="F");
     const v=[...new Set(full.map(r=>`${r[2]} ${r[3]}`))];
     src.info=`${v.join(", ")||"–"} · ${full.length} ตู้`;
-  } else if(src.kind==="BKG") src.info=`${src.booking.length} booking`;
+  } else if(src.kind==="BKG") src.info=`${src.booking.length} booking${src.bkgNormalized?" · ปรับรูปแบบใหม่":""}`;
   else src.info=`${src.gate.length} รายการ`;
   return src;
 }

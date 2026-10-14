@@ -177,6 +177,24 @@ def clean(rows):
     return [pad(r) for r in rows if r and r[0] is not None and str(r[0]).strip() != ""]
 
 
+def normalize_bkg(head, rows):
+    """BKG รุ่นใหม่ (104 คอลัมน์): ลบคอลัมน์ BN "Roll Over" และย้าย BP "Roll Over Remark" ไปต่อท้าย (หลัง CZ)
+    ให้กลับเป็นรูปแบบเดิม 103 คอลัมน์ที่โปรแกรมและสูตร TEMPLATE อ้างอิงตามตำแหน่ง"""
+    h = [str(x).strip() if x is not None else "" for x in head]
+    if "Roll Over" not in h:
+        return head, rows, False
+    last = max(i for i, x in enumerate(h) if x) + 1
+    i_ro = h.index("Roll Over")
+    i_rr = h.index("Roll Over Remark") if "Roll Over Remark" in h else None
+    drop = {i_ro} | ({i_rr} if i_rr is not None else set())
+
+    def fix(r):
+        r = list(r) + [None] * max(0, last - len(r))
+        out = [x for j, x in enumerate(r[:last]) if j not in drop]
+        return out + ([r[i_rr]] if i_rr is not None else [])
+    return fix(head), [pad(fix(r)) for r in rows], True
+
+
 def classify(path):
     name = os.path.basename(path)
     src = {"path": path, "name": name, "kind": None, "loading": [], "booking": [], "gate": [], "manual": {},
@@ -190,8 +208,9 @@ def classify(path):
         src["kind"] = "TEMPLATE"
         src["loading"] = clean(sheets["1.Loading"][1:])
         src["booking"] = clean(sheets["2.Bookinglist"][1:])
+        bhead, src["booking"], src["bkg_normalized"] = normalize_bkg(sheets["2.Bookinglist"][0], src["booking"])
         src["gate"] = clean(sheets["3.GateMove"][1:])
-        src["heads"] = {"LOAD": sheets["1.Loading"][0], "BKG": [h for h in sheets["2.Bookinglist"][0] if h],
+        src["heads"] = {"LOAD": sheets["1.Loading"][0], "BKG": [h for h in bhead if h],
                         "GATE": sheets["3.GateMove"][0]}
         cs = sheets.get("CS", [])
         yf = formulas.get("CS", [])
@@ -217,8 +236,11 @@ def classify(path):
                 if kind:
                     src["kind"] = kind
                     data = clean(rows[h + 1:])
+                    head = rows[h]
+                    if kind == "BKG":
+                        head, data, src["bkg_normalized"] = normalize_bkg(head, data)
                     src[{"LOAD": "loading", "BKG": "booking", "GATE": "gate"}[kind]] = data
-                    src["heads"][kind] = rows[h]
+                    src["heads"][kind] = head
                     break
             if src["kind"]:
                 break
@@ -911,7 +933,8 @@ def main():
     print(f"INPUT: {len(files)} ไฟล์")
     sources = [classify(f) for f in files]
     for s in sources:
-        print(f"  [{s['kind'] or 'X':8s}] {s['name']}" + (f"  !! {s['error']}" if s.get("error") else ""))
+        print(f"  [{s['kind'] or 'X':8s}] {s['name']}" + (f"  !! {s['error']}" if s.get("error") else "")
+              + ("  (BKG รูปแบบใหม่: ลบ BN Roll Over / ย้าย BP Roll Over Remark ไปท้าย)" if s.get("bkg_normalized") else ""))
     sources = [s for s in sources if not s.get("error")]
 
     kinds = {s["kind"] for s in sources}
