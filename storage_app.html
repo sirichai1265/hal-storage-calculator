@@ -983,19 +983,19 @@ function summarySheet(voyages){
   // totals row 2 (Tahoma 10 bold, accounting) — cached values so the file opens with numbers
   [[17,"R"],[19,"T"],[20,"U"]].forEach(([ci,col])=>{ const a=`${col}2`;
     ws[a]={t:"n",f:`SUM(${col}4:${col}${last})`,v:rows.reduce((t,r)=>t+(+r[ci]||0),0),z:ACC,
-      s:{font:{name:"Tahoma",sz:10,bold:true},alignment:{vertical:"center"}}}; });
-  ws.S2={t:"s",v:"=",s:{font:{name:"Tahoma",sz:8},alignment:{horizontal:"center",vertical:"center"}}};
+      s:{font:{name:"Tahoma",sz:10,bold:true},border:XL_BOX,alignment:{vertical:"center",wrapText:true}}}; });
+  ws.S2={t:"s",v:"=",s:{font:{name:"Tahoma",sz:8},border:XL_BOX,alignment:{horizontal:"center",vertical:"center",wrapText:true}}};
   SUM_COLS.forEach(([h,fill,w,wrap],c)=>{ const a=XLSX.utils.encode_cell({r:2,c});
-    ws[a].s={font:{name:"Tahoma",sz:8},border:XL_BOX,alignment:{horizontal:"center",vertical:"center",wrapText:!!wrap},...(fill?{fill:{fgColor:{rgb:fill}}}:{})}; });
+    ws[a].s={font:{name:"Tahoma",sz:8},border:XL_BOX,alignment:{horizontal:"center",vertical:"center",wrapText:true},...(fill?{fill:{fgColor:{rgb:fill}}}:{})}; });
   const DATEC=[9,10,12,13], MONEYC=[17,19,20];
   rows.forEach((row,i)=>row.forEach((v,c)=>{ const a=XLSX.utils.encode_cell({r:i+3,c});
     if(!ws[a]) ws[a]={t:"s",v:""};
-    ws[a].s={font:{name:"Tahoma",sz:8},border:XL_BOX,alignment:{horizontal:c===0||c===3||c===21||c===22?"left":"center",vertical:"center"}};
+    ws[a].s={font:{name:"Tahoma",sz:8},border:XL_BOX,alignment:{horizontal:c===0||c===3||c===21||c===22?"left":"center",vertical:"center",wrapText:true}};
     if(DATEC.includes(c)&&typeof v==="number") ws[a].z="dd/mm/yyyy";
     if(MONEYC.includes(c)&&typeof v==="number") ws[a].z="#,##0";
   }));
   ws["!cols"]=SUM_COLS.map(c=>({wch:c[2]}));
-  ws["!rows"]=[{hpt:27},{hpt:27.75},{hpt:35.25},...rows.map(()=>({hpt:16.5}))];
+  ws["!rows"]=[{hpt:27},{hpt:27.75},{hpt:35.25}];   // แถวข้อมูลไม่กำหนดความสูง ให้ Excel ขยายตามข้อความ (wrap text)
   ws["!ref"]=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(3,rows.length+2),c:SUM_COLS.length-1}});
   return ws;
 }

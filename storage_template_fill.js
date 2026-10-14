@@ -21,6 +21,26 @@
     });
   }
 
+  // เส้นตารางบาง 4 ด้าน + wrap text ทุกช่องที่มีข้อมูล และปลดความสูงแถวคงที่ให้ Excel ปรับตามข้อความ
+  const THIN = { style: "thin", color: { argb: "FF000000" } };
+  function gridAndWrap(ws, lastRow, firstData) {
+    for (let r = 1; r <= lastRow; r++) {
+      const row = ws.getRow(r);
+      let any = false;
+      row.eachCell({ includeEmpty: false }, cell => {
+        const v = cell.value;
+        const isFormula = v && typeof v === "object" && ("formula" in v || "sharedFormula" in v);
+        if (v === null || v === "" || (isFormula && r > 3)) return;   // ข้ามช่องว่าง/สูตรที่ยังไม่มีข้อมูล
+        any = true;
+        cell.style = Object.assign({}, cell.style, {
+          border: { top: THIN, left: THIN, bottom: THIN, right: THIN },
+          alignment: Object.assign({}, cell.style && cell.style.alignment, { wrapText: true, vertical: (cell.style && cell.style.alignment && cell.style.alignment.vertical) || "middle" }),
+        });
+      });
+      if (any && r >= firstData) row.height = undefined;   // แถวข้อมูล: ให้ Excel ขยายความสูงตามข้อความ
+    }
+  }
+
   // sheet name -> part path, from workbook.xml + rels
   async function sheetParts(zip) {
     const wbx = await zip.file("xl/workbook.xml").async("string");
@@ -106,6 +126,13 @@
       const xr = wsS.getRow(4 + i);
       cells.forEach(([v, f], c) => put(xr.getCell(c + 1), v, f));
     });
+
+    const nRaw = { L: uniq(rows.map(r => r._r)).length, B: uniq(rows.map(r => (r._b && r._b.length ? r._b : null))).length, G: uniq(rows.map(r => r._g)).length };
+    gridAndWrap(wb.getWorksheet("1.Loading"), 1 + nRaw.L, 2);
+    gridAndWrap(wb.getWorksheet("2.Bookinglist"), 1 + nRaw.B, 2);
+    gridAndWrap(wb.getWorksheet("3.GateMove"), 1 + nRaw.G, 2);
+    gridAndWrap(wsC, 2 + rows.length, 3);
+    gridAndWrap(wsS, 3 + rows.length, 4);
 
     const out = await wb.xlsx.writeBuffer();
     return restoreConditionalFormatting(JSZip, templateBuf, out);
