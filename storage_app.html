@@ -679,7 +679,7 @@ function renderResults(){
     <div class="tools"><span class="total-note" id="x-status" aria-live="polite"></span><button class="btn" type="button" id="s-all" ${DB?"":"hidden"}>บันทึกทั้งหมดเข้า Dashboard</button><button class="btn primary" type="button" id="x-all">Export ทั้งหมด (.xlsx)</button></div>
   </div>
   <div class="scroll"><table class="grid"><thead><tr><th>พื้นที่</th><th>ETD</th><th>SVC</th><th>VSL / VOY</th><th>POL</th><th>LWharf</th><th class="r">ตู้</th><th class="r">20'</th><th class="r">40'</th><th class="r">เกิน F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th><th class="r">เก็บลูกค้า</th><th class="r">HAL จ่าย</th><th>ไฟล์</th></tr></thead><tbody>${vt}</tbody></table></div>
-  <p class="total-note" style="margin-top:8px">ชื่อไฟล์ Export = ETD_SVC_VSL_VOY_POL_LWharf เช่น <span class="mono">${esc(exportName(voyageSets()[0].rows[0]))}</span></p>
+  <p class="total-note" style="margin-top:8px">Export เป็นไฟล์รูปแบบ STORAGE TEMPLATE (ชีท BKK / LCH) · ชื่อไฟล์ = ETD_SVC_VSL_VOY_POL_LWharf เช่น <span class="mono">${esc(exportName(voyageSets()[0].rows[0]))}</span></p>
   <div class="section-h"><h2>รายตู้</h2>
     <div class="tools">
       <div class="filt" role="group" aria-label="กรองพื้นที่">${["ALL",...areas].map(a=>`<button type="button" data-a="${a}" aria-pressed="${AREA_FILTER===a}">${a==="ALL"?"ทั้งหมด":a}</button>`).join("")}</div>
@@ -740,76 +740,6 @@ function isoDay(n){ if(n==null) return "NOETD"; const d=new Date(n*DAY); return 
 function exportName(r){
   return [isoDay(r.etd),r.svc,r.vsl,r.voyNo,r.pol,r.lwharf].map(v=>String(v||"-").trim().replace(/[\\/:*?"<>|\s]+/g,"-")).join("_")+".xlsx";
 }
-const CS_HEAD=["Container No.","Group","Location","Booking No.","Shipper","Org Shipper","RCVCD","POL","POD","TS PORT","Type Size","CGO TERM","DG","RF",
-  "Vessel","Voyage","SVC","Size","Original Schedule","ETD","Vssl Delay","1st Date allow to return","Date In","Total Stay","Normal F/T Terminal",
-  "Total Storage Days","Total Storage Charge","Special F/T","HQ Ref No. / TML / APP BY","Free Time Customer","คืนก่อนเรือออก","Over F/T Customer",
-  "Amount due to Customer","Collection","Amount due to HAL","Remark","SALESNM","CUST ETD","PICK UP","COMMON REMARKS","ROLL"];
-const serial = n => n==null ? null : n+25569;   // day number -> Excel date serial
-
-// Excel look: Tahoma 8, thin grid on every used cell, dark header row, amber total row
-const XL_LINE={style:"thin",color:{rgb:"7F8A93"}}, XL_BORDER={top:XL_LINE,bottom:XL_LINE,left:XL_LINE,right:XL_LINE};
-function styleGrid(ws,{head=0,total=null,paidCol=null,skipEmpty=false,labelCol=null}={}){
-  if(!ws["!ref"]) return;
-  const R=XLSX.utils.decode_range(ws["!ref"]);
-  for(let r=R.s.r;r<=R.e.r;r++){
-    let empty=true; for(let c=R.s.c;c<=R.e.c;c++){ const x=ws[XLSX.utils.encode_cell({r,c})]; if(x&&x.v!==""&&x.v!=null){empty=false;break;} }
-    if(skipEmpty&&empty) continue;
-    const pc=paidCol!=null?ws[XLSX.utils.encode_cell({r,c:paidCol})]:null, paid=pc&&typeof pc.v==="number"&&pc.v>0&&r!==head&&r!==total;
-    for(let c=R.s.c;c<=R.e.c;c++){
-      const a=XLSX.utils.encode_cell({r,c}); if(!ws[a]){ if(skipEmpty) continue; ws[a]={t:"s",v:""}; }
-      let st={font:{name:"Tahoma",sz:8},border:XL_BORDER,alignment:{vertical:"center"}};
-      if(r===head) st={font:{name:"Tahoma",sz:8,bold:true,color:{rgb:"FFFFFF"}},fill:{fgColor:{rgb:"1F3A4D"}},border:XL_BORDER,alignment:{horizontal:"center",vertical:"center",wrapText:true}};
-      else if(r===total) st={...st,font:{name:"Tahoma",sz:8,bold:true},fill:{fgColor:{rgb:"FFF1D6"}}};
-      else if(paid&&c===paidCol) st={...st,font:{name:"Tahoma",sz:8,bold:true},fill:{fgColor:{rgb:"FBE2C8"}}};
-      else if(labelCol===c) st={...st,font:{name:"Tahoma",sz:8,bold:true},fill:{fgColor:{rgb:"F3F5F7"}}};
-      ws[a].s=st;
-    }
-  }
-}
-function buildWorkbook(set){
-  const rows=[...set.rows].sort((a,b)=>b.charge-a.charge||String(a.cntr).localeCompare(b.cntr)), r0=rows[0], s=agg(rows);
-  const wb=XLSX.utils.book_new();
-  // Summary
-  const sum=[["HAL Storage — สรุปค่า Storage"],[],
-    ["ETD",serial(r0.etd)],["SVC",r0.svc],["VSL",r0.vsl],["VOY",r0.voyNo],["POL",r0.pol],["LWharf",r0.lwharf],["Area",r0.area],["Terminal group",r0.group],[],
-    ["จำนวนตู้",s.n],["20'",s.c20],["40'",s.c40],["ตู้ที่เกิน F/T",s.over],["Storage Days",s.days],
-    ["Total Storage Charge",s.charge],["Amount due to Customer",s.cust],["Collection",rows.reduce((t,r)=>t+r.collect,0)],["Amount due to HAL",s.hal],[],
-    ["คำนวณเมื่อ",new Date().toLocaleString("th-TH")],["ไฟล์ต้นทาง",[...new Set(rows.map(r=>r.file))].join(", ")]];
-  const ws1=XLSX.utils.aoa_to_sheet(sum);
-  if(ws1.B3) ws1.B3.z="dd/mm/yyyy";
-  ["B17","B18","B19","B20"].forEach(a=>{ if(ws1[a]) ws1[a].z="#,##0"; });
-  ws1["!cols"]=[{wch:24},{wch:34}];
-  styleGrid(ws1,{head:0,skipEmpty:true,labelCol:0});
-  XLSX.utils.book_append_sheet(wb,ws1,"Summary");
-  // CS (same columns as the template's CS sheet, values)
-  const data=rows.map(r=>{ const b=r._b;
-    return [r.cntr,r.group,r.loc,r.bkno,b[26]??"",b[27]??"",b[4]??"",b[14]??"",b[18]??"",b[25]??"",r.tpsz,b[84]??"",r.dg?"DG":"",r.rf?"RF":"",
-      r.vessel,r.voy,r.svc??"",r.size,serial(r.orig),serial(r.etd),(r.orig!=null&&r.etd!=null)?r.etd-r.orig:null,serial(r.allow),serial(r.din),r.stay,r.ft,
-      r.days,r.charge,r.spft||null,r.tml||null,r.custFt,(r.allow!=null&&r.etd!=null)?r.etd-r.allow+1:null,r.over,
-      r.custAmt,r.collect||null,r.charge-r.collect,r.ftOverride!=null?`F/T แก้ในแอพ (เดิม ${r.ftDefault})`:(r.ftNote||null),b[39]??"",b[100]??"",b[62]??"",b[51]??"",b[102]??""]; });
-  const tot=["TOTAL",`${s.n} ตู้`]; tot[25]=s.days; tot[26]=s.charge; tot[32]=s.cust; tot[34]=s.hal;
-  const ws2=XLSX.utils.aoa_to_sheet([CS_HEAD,...data,tot]);
-  const dateCols=[18,19,21,22], moneyCols=[26,32,33,34];
-  for(let i=1;i<=data.length+1;i++){
-    dateCols.forEach(c=>{ const a=XLSX.utils.encode_cell({r:i,c}); if(ws2[a]&&ws2[a].t==="n") ws2[a].z="dd/mm/yyyy"; });
-    moneyCols.forEach(c=>{ const a=XLSX.utils.encode_cell({r:i,c}); if(ws2[a]&&ws2[a].t==="n") ws2[a].z="#,##0"; });
-  }
-  ws2["!cols"]=CS_HEAD.map((h,i)=>({wch:[4,5,26,27].includes(i)?32:[0,3].includes(i)?17:[39,40].includes(i)?40:12}));
-  ws2["!autofilter"]={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:data.length,c:CS_HEAD.length-1}})};
-  styleGrid(ws2,{head:0,total:data.length+1,paidCol:26});
-  XLSX.utils.book_append_sheet(wb,ws2,"CS");
-  // raw source rows for this voyage, same layout as the template's input sheets
-  const bks=[...new Set(rows.map(r=>r.bkno))];
-  const H={LOAD:["Container No.","EQ Date","Vessel","Voyage","Type Size","CD","R.C.V","P.O.L","P.O.D","D.L.V","F/E","LEASE_TYPE","Move Code","Location","Area","Nation","Booking No.","T/S","S.O.C","Service","Remark","Auth. No.","Shipper","PreVSLMove","Consignee","Notify","CNTR WGT.","L-Wharf(B/L)","D-Wharf(B/L)"]};
-  const rawSheet=(head,body)=>{ const w=XLSX.utils.aoa_to_sheet([head,...body]); styleGrid(w); return w; };
-  XLSX.utils.book_append_sheet(wb,rawSheet(H.LOAD,rows.map(r=>r._r.slice(0,H.LOAD.length))),"1.Loading");
-  const bkRows=bks.map(k=>rows.find(r=>r.bkno===k)._b).filter(b=>b.length);
-  if(bkRows.length) XLSX.utils.book_append_sheet(wb,rawSheet(BKG_HEAD,bkRows.map(b=>b.slice(0,BKG_HEAD.length))),"2.Bookinglist");
-  const gRows=rows.map(r=>r._g).filter(Boolean);
-  if(gRows.length) XLSX.utils.book_append_sheet(wb,rawSheet(GATE_HEAD,gRows.map(g=>g.slice(0,GATE_HEAD.length))),"3.GateMove");
-  return wb;
-}
-
 let DL_NS; // downloads namespace (resolved lazily)
 async function getDownloads(){
   if(DL_NS!==undefined) return DL_NS;
@@ -823,7 +753,7 @@ async function exportSets(sets){
   let ok=0, last="";
   for(const set of sets){
     const name=exportName(set.rows[0]);
-    const buf=XLSX.write(buildWorkbook(set),{bookType:"xlsx",type:"array"});
+    const buf=XLSX.write(summaryWorkbook([voyageDoc(set)]),{bookType:"xlsx",type:"array"});
     if(dl){
       try{ await dl.save({filename:name,data:new Blob([buf])}); ok++; last=name; }
       catch(e){
@@ -833,7 +763,7 @@ async function exportSets(sets){
         st.textContent="หน้านี้บันทึกไฟล์ไม่ได้ ลองเปิดแอพจากไฟล์ storage_app.html ในเครื่อง"; return;
       }
     } else if(!inViewer){
-      XLSX.writeFile(buildWorkbook(set),name); ok++; last=name;   // opened as a local file
+      XLSX.writeFile(summaryWorkbook([voyageDoc(set)]),name); ok++; last=name;   // opened as a local file
     } else { st.textContent="หน้านี้บันทึกไฟล์ไม่ได้ ลองเปิดแอพจากไฟล์ storage_app.html ในเครื่อง"; return; }
   }
   if(ok) st.textContent = ok===1 ? `บันทึกแล้ว: ${last}` : `บันทึกแล้ว ${ok} ไฟล์`;
@@ -1045,11 +975,15 @@ function summarySheet(voyages){
   ws["!ref"]=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(3,rows.length+2),c:SUM_COLS.length-1}});
   return ws;
 }
+function summaryWorkbook(voyages){   // รูปแบบ STORAGE TEMPLATE: ชีท BKK (BKK + UTCT) และ LCH
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,summarySheet(voyages.filter(v=>v.meta.area!=="LCH")),"BKK");
+  XLSX.utils.book_append_sheet(wb,summarySheet(voyages.filter(v=>v.meta.area==="LCH")),"LCH");
+  return wb;
+}
 async function exportSummary(voyages,filename){
   const st=$("d-status"); if(!voyages.length) return;
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,summarySheet(voyages.filter(v=>v.meta.area!=="LCH")),"BKK");   // BKK + UTCT
-  XLSX.utils.book_append_sheet(wb,summarySheet(voyages.filter(v=>v.meta.area==="LCH")),"LCH");
+  const wb=summaryWorkbook(voyages);
   const name=filename.replace(/[\\/:*?"<>|]+/g,"-");
   if(!(window.claude&&window.claude.use)){ XLSX.writeFile(wb,name); st.textContent=`บันทึกแล้ว: ${name}`; return; }
   const dl=await getDownloads();
