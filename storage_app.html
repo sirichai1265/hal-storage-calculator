@@ -310,7 +310,8 @@ tr.detail .scroll{max-height:420px;overflow:auto}
     <select id="d-month" aria-label="เดือนของ ETD"></select>
     <span class="total-note" id="d-status" aria-live="polite"></span>
     <span class="spacer"></span>
-    <button class="btn primary" type="button" id="d-export" title="ไฟล์สรุปแบบ STORAGE TEMPLATE (ชีท BKK / LCH) ตามตัวกรองที่เลือก">Export ไฟล์สรุป (.xlsx)</button>
+    <button class="btn primary" type="button" id="d-export" title="ไฟล์ STORAGE TEMPLATE ของทุกเที่ยวตามตัวกรอง (เที่ยวละ 1 ไฟล์ รวมเป็น .zip)">Export STORAGE TEMPLATE (.zip)</button>
+    <button class="btn" type="button" id="d-export-sum" title="ไฟล์สรุปหลายเที่ยว ชีท BKK / LCH">ไฟล์สรุป BKK/LCH</button>
     <label class="btn" for="d-import" id="d-import-lbl">นำเข้า STORAGE_DATABASE.xlsx</label>
     <input type="file" id="d-import" accept=".xlsx" hidden>
   </div>
@@ -838,7 +839,10 @@ async function saveSets(sets){
   let ok=0;
   for(const set of sets){
     const d=voyageDoc(set);
-    try{ await DB.collection("voyages").doc(docId(d.meta.name)).set(d); ok++; }
+    try{ await DB.collection("voyages").doc(docId(d.meta.name)).set(d);
+      const raw=voyageRaw(set);
+      for(const k of RAW_KINDS) await DB.collection("voyage_raw").doc(`${docId(d.meta.name)}__${k}`).set({voyage:d.meta.name,kind:k,rows:raw[k]});
+      ok++; }
     catch(e){
       if(e&&e.code==="invalid_argument"){ CAN_WRITE=false; st.textContent="บัญชีนี้ดูได้อย่างเดียว บันทึกเข้า Dashboard ไม่ได้"; refreshSaveLabels(); return; }
       if(e&&e.code==="quota_exceeded"){ st.textContent="ฐานข้อมูลเต็ม ลบเที่ยวเรือเก่าในแท็บ Dashboard ก่อน"; return; }
@@ -869,7 +873,7 @@ function refreshSaveLabels(){
 
 function dashSource(){
   if(DB_STATE==="ok") return DBV;
-  return voyageSets().map(voyageDoc);   // ฐานข้อมูลใช้ไม่ได้: แสดงจากไฟล์ที่เปิดอยู่ตอนนี้
+  return voyageSets().map(set=>Object.assign(voyageDoc(set),{_set:set}));   // ฐานข้อมูลใช้ไม่ได้: แสดงจากไฟล์ที่เปิดอยู่ตอนนี้
 }
 const monthOf = v => (v.meta.etd||"").slice(0,7);
 const TH_MONTH=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
@@ -898,8 +902,10 @@ function renderDash(){
     return;
   }
   const vs=dashFiltered(all);
-  $("d-export").disabled=!vs.length;
-  $("d-export").onclick=()=>exportSummary(vs,`STORAGE SUMMARY_${D_AREA==="ALL"?"ALL":D_AREA}_${D_MONTH==="ALL"?"ALL":D_MONTH}_${isoDay(Math.floor(Date.now()/DAY))}.xlsx`);
+  const tag=`${D_AREA==="ALL"?"ALL":D_AREA}_${D_MONTH==="ALL"?"ALL":D_MONTH}_${isoDay(Math.floor(Date.now()/DAY))}`;
+  $("d-export").disabled=!vs.length; $("d-export-sum").disabled=!vs.length;
+  $("d-export").onclick=()=>exportTemplates(vs,`STORAGE TEMPLATE_${tag}.zip`);
+  $("d-export-sum").onclick=()=>exportSummary(vs,`STORAGE SUMMARY_${tag}.xlsx`);
   const t=sumOf(vs);
   const scope=all.filter(v=>D_MONTH==="ALL"||monthOf(v)===D_MONTH);
   const tiles=["BKK","UTCT","LCH"].map(a=>{ const s=sumOf(scope.filter(v=>v.meta.area===a));
@@ -928,7 +934,7 @@ function renderDash(){
       <td class="num">${fmtDay(etdDay(v))}</td><td>${esc(v.meta.area)}</td><td>${esc(v.meta.terminal)}</td>
       <td class="r num">${v.sum.n}</td><td class="r num">${v.sum.over}</td><td class="r num">${v.sum.days}</td>
       <td class="r num amt">${money(v.sum.charge||0)}</td><td class="r num">${money(v.sum.cust||0)}</td><td class="r num">${money(v.sum.hal||0)}</td>
-      <td style="display:flex;gap:6px"><button class="btn sm" type="button" data-xs="${esc(id)}" title="Export ไฟล์สรุปของเที่ยวนี้">Export</button>${canDel?`<button class="btn sm ${D_CONFIRM===id?"danger":""}" type="button" data-del="${esc(id)}">${D_CONFIRM===id?"ยืนยันลบ":"ลบ"}</button>`:""}</td></tr>`;
+      <td style="display:flex;gap:6px"><button class="btn sm" type="button" data-xs="${esc(id)}" title="Export ไฟล์ STORAGE TEMPLATE ของเที่ยวนี้ (เปิดที่ชีท CS)">Export</button>${canDel?`<button class="btn sm ${D_CONFIRM===id?"danger":""}" type="button" data-del="${esc(id)}">${D_CONFIRM===id?"ยืนยันลบ":"ลบ"}</button>`:""}</td></tr>`;
     if(open){
       const rs=[...(v.rows||[])].sort((a,b)=>b.charge-a.charge||String(a.cntr).localeCompare(b.cntr));
       html+=`<tr class="detail"><td colspan="11"><div class="scroll"><table class="grid"><thead><tr><th>Container</th><th>Loc</th><th>Booking</th><th>Shipper</th><th>Type</th><th></th><th>ตู้เข้า</th><th class="r">อยู่</th><th class="r">F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th></tr></thead><tbody>`
@@ -948,13 +954,15 @@ function renderDash(){
     <div class="scroll"><table class="grid"><thead><tr><th>ETD_SVC_VSL_VOY_POL_LWharf</th><th>ETD</th><th>พื้นที่</th><th>Terminal</th><th class="r">ตู้</th><th class="r">เกิน F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th><th class="r">เก็บลูกค้า</th><th class="r">HAL จ่าย</th><th></th></tr></thead>
     <tbody>${trs}</tbody><tfoot><tr><td colspan="4">รวม ${vs.length} เที่ยว</td><td class="r num">${t.n||0}</td><td class="r num">${t.over||0}</td><td class="r num">${t.days||0}</td><td class="r num">${money(t.charge||0)}</td><td class="r num">${money(t.cust||0)}</td><td class="r num">${money(t.hal||0)}</td><td></td></tr></tfoot></table></div>`;
 
-  out.querySelectorAll("[data-xs]").forEach(b=>b.onclick=()=>{ const v=vs.find(x=>docId(x.meta.name)===b.dataset.xs); if(v) exportSummary([v],`STORAGE SUMMARY_${v.meta.name}.xlsx`); });
+  out.querySelectorAll("[data-xs]").forEach(b=>b.onclick=()=>{ const v=vs.find(x=>docId(x.meta.name)===b.dataset.xs); if(v) exportTemplates([v],`${v.meta.name}.xlsx`); });
   out.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>{ D_OPEN = D_OPEN===b.dataset.open ? null : b.dataset.open; renderDash(); });
   out.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
     const id=b.dataset.del;
     if(D_CONFIRM!==id){ D_CONFIRM=id; renderDash(); setTimeout(()=>{ if(D_CONFIRM===id){ D_CONFIRM=null; renderDash(); } },4000); return; }
     D_CONFIRM=null; b.disabled=true;
-    try{ await DB.collection("voyages").doc(id).delete(); $("d-status").textContent="ลบแล้ว"; }
+    try{ await DB.collection("voyages").doc(id).delete();
+      for(const k of RAW_KINDS){ try{ await DB.collection("voyage_raw").doc(`${id}__${k}`).delete(); }catch(e){} }
+      $("d-status").textContent="ลบแล้ว"; }
     catch(e){ $("d-status").textContent="ลบไม่สำเร็จ ลองอีกครั้ง"; renderDash(); }
   });
 }
@@ -1011,6 +1019,77 @@ function summaryWorkbook(voyages){   // รูปแบบ STORAGE TEMPLATE: ช
   XLSX.utils.book_append_sheet(wb,summarySheet(voyages.filter(v=>v.meta.area==="LCH")),"LCH");
   return wb;
 }
+
+/* ------------------------------------------------------------------ Dashboard → STORAGE TEMPLATE */
+// ข้อมูลดิบต่อเที่ยวเก็บใน collection "voyage_raw" (doc <ชื่อเที่ยว>__loading / __booking / __gate)
+const RAW_KINDS=["loading","booking","gate"];
+const jsonCell=v=>v===undefined?null:v;
+function voyageRaw(set){                       // ทั้งไฟล์ของ source ที่มีข้อมูลเที่ยวนี้ (เหมือนที่วางลง template)
+  const cntrs=new Set(set.rows.map(r=>r.cntr)), bks=new Set(set.rows.map(r=>r.bkno));
+  const hit={loading:r=>cntrs.has(r[0])&&r[10]==="F",booking:r=>bks.has(r[0]),gate:r=>cntrs.has(r[0])};
+  const out={};
+  RAW_KINDS.forEach(k=>{ const rows=[];
+    SOURCES.forEach(s=>{ if((s[k]||[]).some(hit[k])) rows.push(...((s.raw&&s.raw[k])||s[k])); });
+    out[k]=rows.map(r=>{ const a=Array.from(r||[],jsonCell); while(a.length&&(a[a.length-1]==null||a[a.length-1]==="")) a.pop(); return a; });
+  });
+  return out;
+}
+async function loadRaw(v){
+  const id=docId(v.meta.name), out={};
+  for(const k of RAW_KINDS){
+    const snap=await DB.collection("voyage_raw").doc(`${id}__${k}`).get();
+    if(!snap.exists) return null;
+    out[k]=(snap.data().rows||[]).map(r=>Array.from({length:Math.max(110,r.length)},(_,j)=>r[j]??null));
+  }
+  return out;
+}
+// สร้างแถวสำหรับ fillStorageTemplate จากข้อมูลใน Dashboard + ข้อมูลดิบ (ค่าที่บันทึกไว้ = ค่าที่ใช้)
+function setFromDoc(v,raw){
+  const bk={}; raw.booking.forEach(b=>{ if(b[0]!=null&&!(b[0] in bk)) bk[b[0]]=b; });
+  const etd=v.meta.etd?dayFromISO(v.meta.etd):null;
+  const rows=(v.rows||[]).map(d=>{
+    const ld=raw.loading.find(r=>r[0]===d.cntr&&r[10]==="F")||null;
+    const gl=raw.gate.filter(g=>g[0]===d.cntr), g=gl.find(x=>x[12]===d.bkno)||gl[0]||null;
+    const b=bk[d.bkno]||[], dg=!!d.dg;
+    const rule=ftTerminal(d.loc,dg,b[84]);
+    const charge=d.charge||0, hal=d.hal??charge;
+    return {cntr:d.cntr,bkno:d.bkno,shipper:d.shipper,tpsz:d.tpsz,loc:d.loc,area:v.meta.area,group:groupOf(d.loc),
+      size:String(d.tpsz||"").startsWith("22")?"20'":"40'",svc:b[11]||(ld&&ld[19])||"",dg,rf:!!d.rf,
+      etd,orig:d.orig?dayFromISO(d.orig):null,allow:null,din:d.din?dayFromISO(d.din):null,stay:d.stay,
+      ft:d.ft,ftDefault:rule,ftOverride:d.ft!==rule?d.ft:null,days:d.days,charge,spft:0,tml:"",
+      custFt:d.cft,over:0,custAmt:d.cust||0,collect:charge-hal,fixNote:d.remark||null,_r:ld,_b:b,_g:g};
+  });
+  return {rows};
+}
+async function voyageTemplateFile(v){
+  if(v._set) return templateBytes(v._set);                    // ไม่มีฐานข้อมูล: ใช้ไฟล์ที่เปิดอยู่
+  const raw=await loadRaw(v);
+  if(!raw) throw Object.assign(new Error("noraw"),{code:"noraw"});
+  await ensureTemplateLibs();
+  const src=[{loading:raw.loading,booking:raw.booking,gate:raw.gate,raw}];
+  return window.fillStorageTemplate(window.ExcelJS,window.JSZip,b64Bytes(window.STORAGE_TEMPLATE_B64),setFromDoc(v,raw),src);
+}
+async function exportTemplates(voyages,filename){
+  const st=$("d-status"); if(!voyages.length) return;
+  st.textContent=`กำลังสร้างไฟล์ STORAGE TEMPLATE ${voyages.length} เที่ยว…`;
+  const files=[], missing=[];
+  for(const v of voyages){
+    try{ files.push({name:`${v.meta.name}.xlsx`,bytes:await voyageTemplateFile(v)}); }
+    catch(e){ if(e&&e.code==="noraw") missing.push(v.meta.name); else { st.textContent="สร้างไฟล์ไม่สำเร็จ ตรวจการเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง"; return; } }
+  }
+  if(!files.length){ st.textContent="ยังไม่มีข้อมูลดิบของเที่ยวนี้ · บันทึกเที่ยวนี้ใหม่จากแท็บ \"คำนวณจากไฟล์เรือ\""; return; }
+  let data,name;
+  if(voyages.length===1){ data=files[0].bytes; name=files[0].name; }
+  else { const zip=new window.JSZip(); files.forEach(f=>zip.file(f.name,f.bytes)); data=await zip.generateAsync({type:"uint8array",compression:"DEFLATE"}); name=filename; }
+  name=name.replace(/[\\/:*?"<>|]+/g,"-");
+  const note=missing.length?` · ไม่มีข้อมูลดิบ ${missing.length} เที่ยว`:"";
+  if(!(window.claude&&window.claude.use)){ saveLocal(data,name); st.textContent=`บันทึกแล้ว: ${name}${note}`; return; }
+  const dl=await getDownloads();
+  if(!dl){ st.textContent="หน้านี้บันทึกไฟล์ไม่ได้"; return; }
+  try{ await dl.save({filename:name,data:new Blob([data])}); st.textContent=`บันทึกแล้ว: ${name}${note}`; }
+  catch(e){ st.textContent = e&&e.code==="declined" ? "ยกเลิกการบันทึก" : e&&e.code==="rate_limited" ? "มีหน้าต่างบันทึกเปิดค้างอยู่ ลองอีกครั้ง" : "บันทึกไฟล์ไม่สำเร็จ"; }
+}
+
 async function exportSummary(voyages,filename){
   const st=$("d-status"); if(!voyages.length) return;
   const wb=summaryWorkbook(voyages);

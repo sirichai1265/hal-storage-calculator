@@ -61,21 +61,13 @@ DASHBOARD.html                 dashboard รวมทุกเที่ยว
 - ใช้คู่ Container No. + Booking No. จึงไม่กระทบตู้เดียวกันในเที่ยวอื่น
 - ไฟล์ต้นฉบับไม่ถูกแก้ · รายงานบันทึกการแก้ไว้ในคอลัมน์ Remark
 
-## Export ไฟล์สรุป (แท็บ Dashboard ในแอพ)
+## Export จากแท็บ Dashboard ในแอพ
 
-ปุ่ม **Export ไฟล์สรุป (.xlsx)** สร้างไฟล์ตามแม่แบบ `STORAGE TEMPLATE.XLSX` (ชีท BKK / LCH)
-ตามตัวกรองพื้นที่/เดือนที่เลือก หรือกด Export ท้ายแถวเพื่อออกเฉพาะเที่ยวนั้น
-แท็บ **"คำนวณจากไฟล์เรือ"** Export และไฟล์ `VOYAGES/<ชื่อเที่ยว>/<ชื่อเที่ยว>_TEMPLATE.xlsx` = ไฟล์ STORAGE TEMPLATE แบบที่ทีมทำใน Excel
-(ต้นแบบ: `archive/templates/10-14-KUS-2616N-UTCT_reference.xlsx`)
-- 1.Loading / 2.Bookinglist / 3.GateMove = วางทั้งไฟล์ระบบของเที่ยวนั้น (รวมแถวสรุปท้ายไฟล์)
-- CS = เลขตู้ในคอลัมน์ A + สูตรจากแถว 3 ลากลงทุกตู้ (Excel คำนวณเอง) พร้อมค่าแคช · เปิดไฟล์ที่ชีท CS
-- สูตร F/T (คอลัมน์ Y) ปรับตามกฎ: PAT + CFS/CY = 0 · DG = 1 · LCH ทุก terminal = 7 · BKK02 = 5 · อื่น ๆ 3
-- ตู้ที่แก้ใน CORRECTIONS.csv ใส่ Location เป็นค่า (แทนสูตร) และมีหมายเหตุในคอลัมน์ AJ
-- แก้ template แล้วต้องรัน `python storage_calc.py --template-js` (สำหรับแอพ) และ `--template-files` (สร้างไฟล์ของเที่ยวเดิมใหม่)
-
-- ชีท **BKK** = เที่ยว BKK + UTCT · ชีท **LCH** = เที่ยว LCH
-- 23 คอลัมน์ Container No. → SALESNM · แถว 2 = ผลรวม TTL Storage / CUSTOMER PAY / HAL PAY (สูตร SUM)
-- ค่าแต่ละคอลัมน์ใส่ตามชื่อหัวคอลัมน์ (ATD / Date Out = ETD)
+- **Export** ท้ายแถวเที่ยวเรือ → ไฟล์ STORAGE TEMPLATE ของเที่ยวนั้น (เหมือนไฟล์ `_TEMPLATE.xlsx` ใน VOYAGES ทุกช่อง)
+- **Export STORAGE TEMPLATE (.zip)** → ทุกเที่ยวตามตัวกรองพื้นที่/เดือน เที่ยวละ 1 ไฟล์ รวมเป็น .zip
+- **ไฟล์สรุป BKK/LCH** → ไฟล์สรุปหลายเที่ยว (ชีท BKK = BKK + UTCT, ชีท LCH)
+- ข้อมูลดิบต่อเที่ยวเก็บใน collection `voyage_raw` ของแอพ (`<ชื่อเที่ยว>__loading/__booking/__gate`)
+  สร้างจาก `python storage_calc.py --app-raw <โฟลเดอร์> [ชื่อเที่ยว ...]` หรือบันทึกจากแท็บ "คำนวณจากไฟล์เรือ"
 
 ข้อมูลสำหรับฐานข้อมูลแอพ: `python storage_calc.py --app-docs <โฟลเดอร์> [ชื่อเที่ยว ...]` → ไฟล์ JSON ต่อเที่ยว
 สร้างไฟล์ `_TEMPLATE.xlsx` ใหม่จาก SOURCE ของเที่ยวเดิม: `python storage_calc.py --template-files [ชื่อเที่ยว ...]`

@@ -1099,6 +1099,47 @@ def write_app_docs(out_dir, names=None):
     return done
 
 
+def voyage_raw(rows, sources):
+    """ข้อมูลดิบของเที่ยว (ทั้งไฟล์ LOAD / BKG / GATE ที่มีข้อมูลของเที่ยวนี้ รวมแถวสรุปท้ายไฟล์) — ชุดเดียวกับที่วางลง template"""
+    cntrs = {x["cs"]["Container No."] for x in rows}
+    bks = {x["cs"]["Booking No."] for x in rows}
+    hit = {"loading": lambda r: r[0] in cntrs and r[10] == "F", "booking": lambda r: r[0] in bks,
+           "gate": lambda r: r[0] in cntrs}
+    out = {}
+    for kind in ("loading", "booking", "gate"):
+        data = []
+        for s in sources:
+            if any(hit[kind](r) for r in s[kind]):
+                data.extend(s.get("raw", {}).get(kind) or s[kind])
+        out[kind] = data
+    return out
+
+
+def write_app_raw(out_dir, names=None):
+    """python storage_calc.py --app-raw <โฟลเดอร์> [ชื่อเที่ยว ...] → <ชื่อเที่ยว>__loading/booking/gate.json
+    สำหรับ collection "voyage_raw" ของแอพ (ให้แท็บ Dashboard สร้างไฟล์ STORAGE TEMPLATE ได้)"""
+    os.makedirs(out_dir, exist_ok=True)
+    done = []
+    for d in sorted(glob.glob(os.path.join(VOY_DIR, "*", ""))):
+        name = os.path.basename(os.path.dirname(d))
+        if names and name not in names:
+            continue
+        srcs = [x for x in (classify(f) for f in sorted(glob.glob(os.path.join(d, "SOURCE", "*")))) if not x.get("error")]
+        rows, _, _ = compute(srcs)
+        raw = voyage_raw([r for r in rows if voyage_name(r["key"]) == name], srcs)
+        for kind, data in raw.items():
+            trimmed = []
+            for r in data:
+                r = [jsonable(v) for v in r]
+                while r and r[-1] in (None, ""):
+                    r.pop()
+                trimmed.append(r)
+            with open(os.path.join(out_dir, f"{name}__{kind}.json"), "w", encoding="utf-8") as fh:
+                json.dump({"voyage": name, "kind": kind, "rows": trimmed}, fh, ensure_ascii=False, default=str)
+        done.append(name)
+    return done
+
+
 def write_template_js(src=None, dst=None):
     """python storage_calc.py --template-js → storage_template.js (STORAGE TEMPLATE.XLSX เป็น base64 สำหรับแอพ)
     รันใหม่ทุกครั้งที่แก้ไฟล์ STORAGE TEMPLATE.XLSX"""
@@ -1198,6 +1239,10 @@ if __name__ == "__main__":
             mine = [r for r in rows if voyage_name(r["key"]) == name]
             write_template_xlsx(os.path.join(d, f"{name}_TEMPLATE.xlsx"), mine, [x for x in srcs if not x.get("error")])
             print(f"{name}_TEMPLATE.xlsx  {len(mine)} ตู้  {sum(r['cs']['Total Storage Charge'] for r in mine):,}")
+        sys.exit(0)
+    if len(sys.argv) > 2 and sys.argv[1] == "--app-raw":
+        for n in write_app_raw(sys.argv[2], sys.argv[3:] or None):
+            print(n)
         sys.exit(0)
     if len(sys.argv) > 1 and sys.argv[1] == "--template-js":
         print(write_template_js())

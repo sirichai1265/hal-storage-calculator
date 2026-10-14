@@ -107,18 +107,20 @@
     const manual = { S: r => r.orig, V: r => r.allow, AB: r => r.spft || null, AC: r => r.tml || null, AH: r => r.collect || null };
     rows.forEach((r, i) => {
       const rr = 3 + i, xr = ws.getRow(rr), cv = cached(r);
-      const ftFixed = r.ftOverride != null;                 // F/T ที่แก้ในแอพ → ใส่เป็นค่า
+      const ftFixed = r.ftOverride != null;                 // F/T ที่แก้เอง → ใส่เป็นค่า
+      const locFixed = !!(r._r && r.loc && r._r[13] !== r.loc);   // Location ที่แก้ใน CORRECTIONS.csv → ใส่เป็นค่า
       proto.forEach((pc, j) => {
         const col = colName(j + 1), cell = xr.getCell(j + 1);
         if (i > 0) cell.style = clone(pc.style);
         const f = pc.v && typeof pc.v === "object" && pc.v.formula;
         if (j === 0) cell.value = r.cntr;
+        else if (col === "C" && locFixed) cell.value = r.loc;
         else if (col === "Y" && ftFixed) cell.value = r.ft;
         else if (f) cell.value = { formula: translate(f, rr), result: cv[col] !== undefined ? cv[col] : undefined };
         else if (manual[col]) {
           const v = manual[col](r);
           cell.value = (col === "S" || col === "V") ? (v == null ? null : new Date(v * 864e5)) : blank(v);
-        } else if (col === "AJ") cell.value = ftFixed ? `F/T แก้ในแอพ (เดิม ${r.ftDefault})` : null;
+        } else if (col === "AJ") cell.value = (ftFixed || locFixed) ? (r.fixNote || `F/T แก้ในแอพ (เดิม ${r.ftDefault})`) : null;
         else cell.value = null;
       });
       if (h) xr.height = h;
