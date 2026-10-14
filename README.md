@@ -38,6 +38,7 @@ INPUT/                         ไฟล์รอคำนวณ (ว่าง�
 VOYAGES/<ชื่อเที่ยว>/
   <ชื่อเที่ยว>.xlsx             รายงาน Tahoma 8 มีเส้นตาราง: Summary, CS, 1.Loading, 2.Bookinglist, 3.GateMove
   <ชื่อเที่ยว>_DASHBOARD.html   dashboard ของเที่ยว
+  <ชื่อเที่ยว>_TEMPLATE.xlsx     ไฟล์ STORAGE TEMPLATE ที่เติมข้อมูลครบทุกชีท (เปิดที่ชีท CS)
   SOURCE/                      ไฟล์ต้นฉบับที่ใช้คำนวณ
   data.json                    ข้อมูลสำหรับสร้างฐานข้อมูล
 DATABASE/STORAGE_DATABASE.xlsx ฐานข้อมูลรวม (ชีท Voyages, Containers)
@@ -72,6 +73,7 @@ DASHBOARD.html                 dashboard รวมทุกเที่ยว
 - ค่าแต่ละคอลัมน์ใส่ตามชื่อหัวคอลัมน์ (ATD / Date Out = ETD)
 
 ข้อมูลสำหรับฐานข้อมูลแอพ: `python storage_calc.py --app-docs <โฟลเดอร์> [ชื่อเที่ยว ...]` → ไฟล์ JSON ต่อเที่ยว
+สร้างไฟล์ `_TEMPLATE.xlsx` ใหม่จาก SOURCE ของเที่ยวเดิม: `python storage_calc.py --template-files [ชื่อเที่ยว ...]`
 
 ## ไฟล์ BKG รูปแบบใหม่ (104 คอลัมน์)
 

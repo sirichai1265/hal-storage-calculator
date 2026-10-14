@@ -583,6 +583,90 @@ def write_voyage_xlsx(path, name, meta, rows, heads):
     wb.save(path)
 
 
+TEMPLATE_FILE = os.path.join(BASE, "STORAGE TEMPLATE.XLSX")
+SUMMARY_MAP = ["Container No.", "Location", "Booking No.", "Shipper", "POL", "POD", "Type Size", "Vessel", "Voyage",
+               "Original Schedule", "ETD", "Vssl Delay", "Date In", "ETD", "Total Stay", "Normal F/T Terminal",
+               "Total Storage Days", "Total Storage Charge", "Free Time Customer", "Amount due to Customer",
+               "Amount due to HAL", "Remark", "SALESNM"]   # หัวคอลัมน์ชีท BKK/LCH ของ template (ATD/Date Out = ETD)
+INT_COLS = {"Vssl Delay", "Total Stay", "Normal F/T Terminal", "Total Storage Days", "Special F/T", "Free Time Customer",
+            "คืนก่อนเรือออก", "Over F/T Customer"}
+
+
+def write_template_xlsx(path, rows):
+    """ไฟล์ STORAGE TEMPLATE.XLSX ที่เติมข้อมูล 1 เที่ยว (ชีท 1-3 ข้อมูลดิบ, CS, BKK หรือ LCH) เปิดที่ชีท CS
+    — ชีท BKK/LCH ใส่เป็นค่าตามชื่อหัวคอลัมน์ (สูตร VLOOKUP เดิมของ template อ่านเลื่อนไป 1 คอลัมน์)"""
+    from copy import copy
+    wb = openpyxl.load_workbook(TEMPLATE_FILE)
+    rows = sorted(rows, key=lambda x: str(x["cs"]["Container No."]))
+
+    def uniq(seq):
+        out, seen = [], set()
+        for x in seq:
+            if x is not None and len(x) and id(x) not in seen:
+                seen.add(id(x))
+                out.append(x)
+        return out
+
+    def style(c, fmt=None):
+        c.border = GRID
+        al = copy(c.alignment)
+        al.wrap_text = True
+        al.vertical = al.vertical or "center"
+        c.alignment = al
+        if fmt:
+            c.number_format = fmt
+
+    def fmt_of(h):
+        return FMT_DATE if h in DATE_COLS else "#,##0" if h in MONEY_COLS else "0" if h in INT_COLS else None
+
+    def put_raw(ws, data, width):
+        for i, r in enumerate(data, 2):
+            for j in range(width):
+                v = r[j] if j < len(r) else None
+                if v not in (None, ""):
+                    ws.cell(i, j + 1, v)
+        return 1 + len(data)
+
+    def finish(ws, last, first_data):
+        for r in range(1, last + 1):
+            any_v = False
+            for c in ws[r]:
+                v = c.value
+                if v in (None, "") or (isinstance(v, str) and v.startswith("=") and r > 3):
+                    continue
+                any_v = True
+                style(c)
+            if any_v and r >= first_data:
+                ws.row_dimensions[r].height = None   # ให้ Excel ขยายตามข้อความ (wrap text)
+
+    last = put_raw(wb["1.Loading"], uniq(x["load"] for x in rows), 29)
+    finish(wb["1.Loading"], last, 2)
+    last = put_raw(wb["2.Bookinglist"], uniq(x["bkg"] for x in rows), 103)
+    finish(wb["2.Bookinglist"], last, 2)
+    last = put_raw(wb["3.GateMove"], uniq(x["gate"] for x in rows), 37)
+    finish(wb["3.GateMove"], last, 2)
+
+    cs_cols = [c for c in CS_COLS if c != "Terminal"]          # = 41 คอลัมน์ของชีท CS ใน template
+    ws = wb["CS"]
+    for i, x in enumerate(rows, 3):
+        for j, h in enumerate(cs_cols, 1):
+            c = ws.cell(i, j, x["cs"].get(h))
+            style(c, fmt_of(h))
+    finish(ws, 2 + len(rows), 3)
+
+    ws = wb["LCH" if rows and rows[0]["area"] == "LCH" else "BKK"]
+    for i, x in enumerate(rows, 4):
+        for j, h in enumerate(SUMMARY_MAP, 1):
+            c = ws.cell(i, j, x["cs"].get(h))
+            style(c, fmt_of(h))
+    finish(ws, 3 + len(rows), 4)
+
+    for w in wb.worksheets:                                       # เปิดไฟล์ที่ชีท CS
+        w.sheet_view.tabSelected = (w.title == "CS")
+    wb.active = wb.sheetnames.index("CS")
+    wb.save(path)
+
+
 def write_database(voyages):
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -978,6 +1062,8 @@ def main():
                     "sources": sorted(sources[i]["name"] for i in src_idx),
                     "warnings": [w for w in warnings if w.split(":")[0] in cset]}
             write_voyage_xlsx(os.path.join(folder, f"{name}.xlsx"), name, meta, srows, heads)
+            if os.path.exists(TEMPLATE_FILE):
+                write_template_xlsx(os.path.join(folder, f"{name}_TEMPLATE.xlsx"), srows)
             data = {"meta": meta, "rows": [{k: jsonable(v) for k, v in r["cs"].items()} for r in srows]}
             with open(os.path.join(folder, "data.json"), "w", encoding="utf-8") as fh:
                 json.dump(data, fh, ensure_ascii=False, indent=1)
@@ -1010,6 +1096,19 @@ def main():
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    if len(sys.argv) > 1 and sys.argv[1] == "--template-files":
+        # python storage_calc.py --template-files [ชื่อเที่ยว ...] → สร้าง <ชื่อเที่ยว>_TEMPLATE.xlsx จาก SOURCE ของเที่ยวเดิม
+        names = sys.argv[2:]
+        for d in sorted(glob.glob(os.path.join(VOY_DIR, "*", ""))):
+            name = os.path.basename(os.path.dirname(d))
+            if names and name not in names:
+                continue
+            srcs = [classify(f) for f in sorted(glob.glob(os.path.join(d, "SOURCE", "*")))]
+            rows, _, _ = compute([x for x in srcs if not x.get("error")])
+            mine = [r for r in rows if voyage_name(r["key"]) == name]
+            write_template_xlsx(os.path.join(d, f"{name}_TEMPLATE.xlsx"), mine)
+            print(f"{name}_TEMPLATE.xlsx  {len(mine)} ตู้  {sum(r['cs']['Total Storage Charge'] for r in mine):,}")
+        sys.exit(0)
     if len(sys.argv) > 1 and sys.argv[1] == "--template-js":
         print(write_template_js())
         sys.exit(0)
