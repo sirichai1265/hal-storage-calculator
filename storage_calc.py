@@ -895,6 +895,7 @@ def dmy(d, short=False):
 def page(title, header_html, body):
     return (f'<!doctype html><html lang="th"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
+            f'<meta http-equiv="refresh" content="300">'
             f'<title>{e(title)}</title><style>{DASH_CSS}</style></head><body>'
             f'<header><div class="wrap">{header_html}</div></header><main><div class="wrap">{body}'
             f'<footer>สร้างโดย storage_calc.py · {datetime.now():%d/%m/%Y %H:%M}</footer></div></main></body></html>')

@@ -151,6 +151,8 @@ table{border-collapse:collapse;width:100%}
 .dash-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
 .dash-top select{width:auto;min-height:36px}
 .dash-top .spacer{flex:1}
+.gh{text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:2px 10px;color:var(--muted)}
+.gh.ok{color:var(--good);border-color:var(--good)} .gh.wait{color:var(--accent-ink);border-color:var(--accent)} .gh.err{color:var(--warn);border-color:var(--warn)}
 .dash-empty{padding:24px;display:grid;gap:6px;text-align:center;justify-items:center}
 .dash-empty p{margin:0;color:var(--muted);max-width:60ch}
 .hbars{display:grid;gap:4px}
@@ -309,6 +311,7 @@ tr.detail .scroll{max-height:420px;overflow:auto}
     <div class="filt" role="group" aria-label="กรองพื้นที่" id="d-area"></div>
     <select id="d-month" aria-label="เดือนของ ETD"></select>
     <span class="total-note" id="d-status" aria-live="polite"></span>
+    <a class="total-note gh" id="d-gh" href="https://sirichai1265.github.io/hal-storage-calculator/DASHBOARD.html" target="_blank" rel="noopener" hidden></a>
     <span class="spacer"></span>
     <button class="btn primary" type="button" id="d-export" title="ไฟล์ STORAGE TEMPLATE ของทุกเที่ยวตามตัวกรอง (เที่ยวละ 1 ไฟล์ รวมเป็น .zip)">Export STORAGE TEMPLATE (.zip)</button>
     <button class="btn" type="button" id="d-export-sum" title="ไฟล์สรุปหลายเที่ยว ชีท BKK / LCH">ไฟล์สรุป BKK/LCH</button>
@@ -817,7 +820,18 @@ function copyTable(){
 /* ------------------------------------------------------------------ dashboard (shared database) */
 // เก็บ 1 เอกสารต่อเที่ยวเรือใน collection "voyages" : {meta, sum, rows}
 let DB=null, DBV=[], DB_STATE="loading", CAN_WRITE=true;
-const FIXES=new Map();      // collection "corrections": <cntr>__<bkno> → {cntr,bkno,loc,remark} (ตรงกับ CORRECTIONS.csv)
+const FIXES=new Map();
+let GH=null;                // collection "sync_status" doc "github": งานซิงก์อัตโนมัติขึ้น GitHub Dashboard (ทุก 5 นาที)
+const hhmm=t=>{ const d=new Date(t); return isNaN(d)?"":d.toLocaleString("th-TH",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); };
+function ghPending(){ const at=GH&&Date.parse(GH.at); return DBV.filter(v=>v.meta&&v.meta.via==="app"&&(!at||Date.parse(v.meta.savedAt)>at)); }
+function renderGh(){
+  const el=document.getElementById("d-gh"); if(!el) return;
+  if(DB_STATE!=="ok"){ el.hidden=true; return; }
+  const pend=ghPending(); el.hidden=false;
+  if(GH&&GH.status==="error"&&pend.length){ el.className="total-note gh err"; el.textContent=`⚠ GitHub Dashboard ซิงก์ไม่สำเร็จ ${hhmm(GH.at)}: ${GH.message||""}`; }
+  else if(pend.length){ el.className="total-note gh wait"; el.textContent=`⏳ GitHub Dashboard: รอซิงก์ ${pend.length} เที่ยว (ภายใน ~5 นาที)`; }
+  else { el.className="total-note gh ok"; el.textContent=GH?`✓ GitHub Dashboard ซิงก์ล่าสุด ${hhmm(GH.at)}`:"GitHub Dashboard"; }
+}      // collection "corrections": <cntr>__<bkno> → {cntr,bkno,loc,remark} (ตรงกับ CORRECTIONS.csv)
 let D_AREA="ALL", D_MONTH="ALL", D_OPEN=null, D_CONFIRM=null;
 const LOC_NAME = code => (LOCS.find(l=>l.code===code)||{}).name || code || "";
 const voyName = r0 => exportName(r0).replace(/\.xlsx$/,"");
@@ -873,7 +887,7 @@ async function saveSets(sets,auto){
     }
   }
   const what = ok===1 ? voyageDoc(sets[0]).meta.name : `${ok} เที่ยว`;
-  st.textContent = auto ? `✓ อัปเดต Dashboard อัตโนมัติแล้ว: ${what}` : `บันทึกเข้า Dashboard แล้ว: ${what}`;
+  st.textContent = (auto ? `✓ อัปเดต Dashboard อัตโนมัติแล้ว: ${what}` : `บันทึกเข้า Dashboard แล้ว: ${what}`) + " · GitHub Dashboard จะอัปเดตภายใน ~5 นาที";
 }
 function refreshSaveLabels(){
   document.querySelectorAll(".sbtn").forEach(b=>{
@@ -889,6 +903,7 @@ function refreshSaveLabels(){
   if(!DB){ DB_STATE="off"; renderDash(); return; }
   try{ const u=await window.claude.use("user"); if(u){ const c=await u.can("data.write"); if(c===false) CAN_WRITE=false; } }catch(e){}
   $("d-import-lbl").hidden=!CAN_WRITE;
+  DB.collection("sync_status").doc("github").onSnapshot(snap=>{ GH=snap.exists?snap.data():null; renderGh(); }, ()=>{});
   DB.collection("corrections").onSnapshot(snap=>{
     FIXES.clear();
     snap.docs.forEach(d=>{ const x=d.data()||{}; if(x.cntr&&x.bkno) FIXES.set(`${String(x.cntr).toUpperCase()}|${String(x.bkno).toUpperCase()}`,x); });
@@ -897,7 +912,7 @@ function refreshSaveLabels(){
   DB.collection("voyages").onSnapshot(snap=>{
     const first=DB_STATE!=="ok";
     DBV=snap.docs.map(d=>d.data()).filter(v=>v&&v.meta&&v.sum);
-    DB_STATE="ok"; renderDash(); refreshSaveLabels();
+    DB_STATE="ok"; renderDash(); refreshSaveLabels(); renderGh();
     if(first&&ROWS.length) scheduleAutoSave();
   }, ()=>{ DB_STATE="off"; renderDash(); });
 })();
