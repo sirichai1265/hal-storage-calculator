@@ -69,9 +69,19 @@
   const CF_RE = /<conditionalFormatting\b[^>]*\/>|<conditionalFormatting\b[\s\S]*?<\/conditionalFormatting>/g;
   const CF_BEFORE = /<(dataValidations|hyperlinks|printOptions|pageMargins|pageSetup|headerFooter|rowBreaks|colBreaks|drawing|legacyDrawing|tableParts|extLst)\b|<\/worksheet>/;
 
+  // ExcelJS เขียนลูกของ <sheetPr> สลับลำดับ (pageSetUpPr ก่อน outlinePr) → Excel ถือว่าชีทเสีย
+  // ลำดับตามมาตรฐาน: tabColor, outlinePr, pageSetUpPr
+  function fixSheetPr(xml) {
+    return xml.replace(/<sheetPr\b([^>]*)>([\s\S]*?)<\/sheetPr>/, (m, attrs, body) => {
+      const pick = tag => (body.match(new RegExp(`<${tag}\\b[^>]*\\/>|<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`)) || [""])[0];
+      return `<sheetPr${attrs}>${pick("tabColor")}${pick("outlinePr")}${pick("pageSetUpPr")}</sheetPr>`;
+    });
+  }
+
   async function restoreConditionalFormatting(JSZip, templateBuf, outBuf) {
     const zt = await JSZip.loadAsync(templateBuf), zo = await JSZip.loadAsync(outBuf);
     const pt = await sheetParts(zt), po = await sheetParts(zo);
+    for (const name of Object.keys(po)) zo.file(po[name], fixSheetPr(await zo.file(po[name]).async("string")));
     for (const name of Object.keys(pt)) {
       if (!po[name]) continue;
       const tx = await zt.file(pt[name]).async("string");
