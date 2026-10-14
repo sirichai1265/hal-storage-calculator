@@ -532,12 +532,15 @@ function normalizeBkg(head,rows){
   return {head:fix(head),rows:rows.map(fix),changed:true};
 }
 function classify(wb,name){
-  const src={name,kind:null,loading:[],booking:[],gate:[],manual:{},info:""};
+  const src={name,kind:null,loading:[],booking:[],gate:[],manual:{},info:"",raw:{}};
+  const nonblank=rows=>rows.filter(r=>r&&r.some(v=>v!=null&&v!==""));   // เก็บแถวท้ายไฟล์ (ไม่มีเลขตู้) ไว้วางใน template
   if(["1.Loading","2.Bookinglist","3.GateMove"].every(s=>wb.SheetNames.includes(s))){
     src.kind="TEMPLATE";
     src.loading=clean(sheetRows(wb,"1.Loading").slice(1));
     const nb=normalizeBkg(sheetRows(wb,"2.Bookinglist")[0]||[],clean(sheetRows(wb,"2.Bookinglist").slice(1)));
     src.booking=nb.rows; src.bkgNormalized=nb.changed;
+    src.raw={loading:nonblank(sheetRows(wb,"1.Loading").slice(1)),gate:nonblank(sheetRows(wb,"3.GateMove").slice(1)),
+      booking:normalizeBkg(sheetRows(wb,"2.Bookinglist")[0]||[],nonblank(sheetRows(wb,"2.Bookinglist").slice(1))).rows};
     src.gate=clean(sheetRows(wb,"3.GateMove").slice(1));
     BKG_HEAD=(nb.head||[]).filter(v=>v!=null); GATE_HEAD=sheetRows(wb,"3.GateMove")[0]||GATE_HEAD;
     if(wb.SheetNames.includes("CS")){
@@ -559,7 +562,10 @@ function classify(wb,name){
         else if(hdr[0]==="Container No"&&hdr.includes("GateDate")) kind="GATE";
         if(kind){
           src.kind=kind; const data=clean(rows.slice(h+1));
-          if(kind==="LOAD") src.loading=data; else if(kind==="BKG"){ const nb=normalizeBkg(rows[h],data); src.booking=nb.rows; src.bkgNormalized=nb.changed; BKG_HEAD=nb.head; } else { src.gate=data; GATE_HEAD=rows[h]; }
+          const raw=nonblank(rows.slice(h+1));
+          if(kind==="LOAD"){ src.loading=data; src.raw.loading=raw; }
+          else if(kind==="BKG"){ const nb=normalizeBkg(rows[h],data); src.booking=nb.rows; src.bkgNormalized=nb.changed; BKG_HEAD=nb.head; src.raw.booking=normalizeBkg(rows[h],raw).rows; }
+          else { src.gate=data; GATE_HEAD=rows[h]; src.raw.gate=raw; }
           break;
         }
       }
@@ -761,7 +767,7 @@ function ensureTemplateLibs(){
 function b64Bytes(b64){ const bin=atob(b64), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; }
 async function templateBytes(set){
   await ensureTemplateLibs();
-  return window.fillStorageTemplate(window.ExcelJS,window.JSZip,b64Bytes(window.STORAGE_TEMPLATE_B64),set);
+  return window.fillStorageTemplate(window.ExcelJS,window.JSZip,b64Bytes(window.STORAGE_TEMPLATE_B64),set,SOURCES);
 }
 function saveLocal(bytes,name){   // opened as a local file / GitHub Pages
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));

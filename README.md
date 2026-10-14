@@ -65,8 +65,13 @@ DASHBOARD.html                 dashboard รวมทุกเที่ยว
 
 ปุ่ม **Export ไฟล์สรุป (.xlsx)** สร้างไฟล์ตามแม่แบบ `STORAGE TEMPLATE.XLSX` (ชีท BKK / LCH)
 ตามตัวกรองพื้นที่/เดือนที่เลือก หรือกด Export ท้ายแถวเพื่อออกเฉพาะเที่ยวนั้น
-แท็บ **"คำนวณจากไฟล์เรือ"** Export เป็นไฟล์ `STORAGE TEMPLATE.XLSX` ที่เติมข้อมูลเที่ยวนั้นครบทุกชีท (1.Loading · 2.Bookinglist · 3.GateMove · CS · BKK/LCH · Charge) ไฟล์ละ 1 เที่ยว ชื่อ `ETD_SVC_VSL_VOY_POL_LWharf.xlsx`
-- แอพใช้ `storage_template.js` (template แบบ base64) + `storage_template_fill.js` — **แก้ template แล้วต้องรัน** `python storage_calc.py --template-js` และ publish/push ใหม่
+แท็บ **"คำนวณจากไฟล์เรือ"** Export และไฟล์ `VOYAGES/<ชื่อเที่ยว>/<ชื่อเที่ยว>_TEMPLATE.xlsx` = ไฟล์ STORAGE TEMPLATE แบบที่ทีมทำใน Excel
+(ต้นแบบ: `archive/templates/10-14-KUS-2616N-UTCT_reference.xlsx`)
+- 1.Loading / 2.Bookinglist / 3.GateMove = วางทั้งไฟล์ระบบของเที่ยวนั้น (รวมแถวสรุปท้ายไฟล์)
+- CS = เลขตู้ในคอลัมน์ A + สูตรจากแถว 3 ลากลงทุกตู้ (Excel คำนวณเอง) พร้อมค่าแคช · เปิดไฟล์ที่ชีท CS
+- สูตร F/T (คอลัมน์ Y) ปรับตามกฎ: PAT + CFS/CY = 0 · DG = 1 · LCH ทุก terminal = 7 · BKK02 = 5 · อื่น ๆ 3
+- ตู้ที่แก้ใน CORRECTIONS.csv ใส่ Location เป็นค่า (แทนสูตร) และมีหมายเหตุในคอลัมน์ AJ
+- แก้ template แล้วต้องรัน `python storage_calc.py --template-js` (สำหรับแอพ) และ `--template-files` (สร้างไฟล์ของเที่ยวเดิมใหม่)
 
 - ชีท **BKK** = เที่ยว BKK + UTCT · ชีท **LCH** = เที่ยว LCH
 - 23 คอลัมน์ Container No. → SALESNM · แถว 2 = ผลรวม TTL Storage / CUSTOMER PAY / HAL PAY (สูตร SUM)

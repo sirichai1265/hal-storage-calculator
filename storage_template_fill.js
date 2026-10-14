@@ -1,44 +1,52 @@
-/* เติมข้อมูล 1 เที่ยวลงไฟล์ STORAGE TEMPLATE.XLSX
-   - ใช้ ExcelJS เขียนค่า (คงรูปแบบ/สี/สูตรของ template)
-   - แล้วใช้ JSZip นำ Conditional Formatting เดิมของ template กลับมา (ExcelJS ไม่รองรับ "duplicateValues" จึงตัดทิ้ง)
-   ใช้ในแอพ (แท็บ "คำนวณจากไฟล์เรือ") — set = {rows:[...]} จาก voyageSets(); แต่ละแถวมี _r (LOAD), _b (BKG), _g (GATE)
-   templateBuf = ArrayBuffer/Uint8Array ของ STORAGE TEMPLATE.XLSX */
+/* ไฟล์ STORAGE TEMPLATE ของ 1 เที่ยว แบบเดียวกับที่ทีมทำใน Excel (ตัวอย่าง 10-14-KUS-2616N-UTCT.xlsx)
+   - 1.Loading / 2.Bookinglist / 3.GateMove = วางทั้งไฟล์ระบบของเที่ยวนั้น (รวมแถวสรุปท้ายไฟล์)
+   - CS = เลขตู้ในคอลัมน์ A + ลากสูตรจากแถว 3 ของ template ลงมาทุกตู้ พร้อมค่าแคช (เปิดใน Protected View ก็เห็นตัวเลข)
+   - BKK / LCH / Charge ไม่แตะ · เปิดไฟล์ที่ชีท CS
+   ใช้ ExcelJS เขียน แล้วใช้ JSZip นำ Conditional Formatting เดิมของ template กลับมา (ExcelJS ไม่รองรับ duplicateValues)
+   set = {rows:[...]} จาก voyageSets() (แต่ละแถวมี _r LOAD, _b BKG, _g GATE) · sources = SOURCES ของแอพ */
 (function (root) {
-  const DAYMS = 864e5;
-  const asDate = d => (d == null ? null : new Date(d * DAYMS));          // day number (UTC) -> Date
-  const val = v => (v === undefined || v === "" ? null : v);
-  const FMT = { date: "dd/mm/yyyy", money: "#,##0", int: "0" };
+  const XL_EPOCH = 25569;                                    // day number (days since 1970-01-01) -> Excel serial
+  const serial = d => (d == null ? 0 : d + XL_EPOCH);
+  const z = v => (v === undefined || v === null || v === "" ? 0 : v);   // VLOOKUP ของช่องว่าง = 0
+  const blank = v => (v === undefined || v === null || v === "" ? null : v);
+  const clone = o => JSON.parse(JSON.stringify(o || {}));
 
-  // ExcelJS shares one style object between cells: copy it before changing the number format
-  function put(cell, v, fmt) {
-    cell.value = val(v);
-    if (fmt) cell.style = Object.assign({}, cell.style, { numFmt: fmt });
+  // แปลงสูตรแถว 3 ไปแถว r (อ้างอิงแถวแบบสัมพัทธ์เท่านั้น เช่น C3 → C10 แต่ $J$1 คงเดิม)
+  // ข้ามข้อความในเครื่องหมายคำพูด เช่น B3="G3" ต้องได้ B10="G3" (G3 คือกลุ่ม terminal ไม่ใช่ช่องเซลล์)
+  const translate = (f, r) => f.split(/("(?:[^"]|"")*")/).map((part, i) => (i % 2 ? part :
+    part.replace(/(^|[^A-Za-z0-9_$!'.])(\$?[A-Z]{1,3})3(?![0-9])/g, (m, pre, col) => pre + col + r))).join("");
+  const colName = n => { let s = ""; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+
+  function cached(r) {
+    const b = r._b || [], ld = r._r || [], g = r._g || [];
+    return {
+      B: r.group, C: r.loc, D: r.bkno, E: z(b[26]), F: z(b[27]), G: z(b[4]), H: z(b[14]), I: z(b[18]), J: z(b[25]),
+      K: r.tpsz, L: z(b[84]), M: r.dg ? "DG" : "", N: r.rf ? "RF" : "", O: z(ld[2]), P: z(ld[3]), Q: z(b[11]), R: r.size,
+      T: z(ld[1]), U: serial(r.etd) - serial(r.orig), W: z(g[3]), X: r.stay, Y: r.ft, Z: r.days, AA: r.charge,
+      AD: r.custFt, AE: serial(r.etd) - serial(r.allow) + 1, AF: r.over, AG: r.custAmt, AI: r.charge - (r.collect || 0),
+      AK: z(b[39]), AL: z(b[100]), AM: z(b[62]), AN: z(b[51]), AO: z(b[102]),
+    };
   }
-  function putRows(ws, startRow, rows, width) {
-    rows.forEach((r, i) => {
-      const xr = ws.getRow(startRow + i);
-      for (let c = 0; c < width; c++) { const v = val(r ? r[c] : null); if (v !== null) xr.getCell(c + 1).value = v; }
+
+  // ทั้งไฟล์ของ source ที่มีข้อมูลเที่ยวนี้ (src.raw เก็บแถวท้ายไฟล์ที่ไม่มีเลขตู้ไว้ด้วย)
+  function pick(sources, kind, hit, fallback) {
+    const out = [];
+    (sources || []).forEach(s => { if ((s[kind] || []).some(hit)) out.push(...((s.raw && s.raw[kind]) || s[kind])); });
+    return out.length ? out : fallback;
+  }
+
+  function putRaw(ws, data, width) {
+    const proto = Array.from({ length: width }, (_, j) => clone(ws.getRow(2).getCell(j + 1).style));
+    const h = ws.getRow(2).height;
+    data.forEach((row, i) => {
+      const xr = ws.getRow(2 + i);
+      for (let j = 0; j < width; j++) {
+        const c = xr.getCell(j + 1);
+        c.value = blank(row ? row[j] : null);
+        if (i > 0) c.style = clone(proto[j]);
+      }
+      if (h) xr.height = h;
     });
-  }
-
-  // เส้นตารางบาง 4 ด้าน + wrap text ทุกช่องที่มีข้อมูล และปลดความสูงแถวคงที่ให้ Excel ปรับตามข้อความ
-  const THIN = { style: "thin", color: { argb: "FF000000" } };
-  function gridAndWrap(ws, lastRow, firstData) {
-    for (let r = 1; r <= lastRow; r++) {
-      const row = ws.getRow(r);
-      let any = false;
-      row.eachCell({ includeEmpty: false }, cell => {
-        const v = cell.value;
-        const isFormula = v && typeof v === "object" && ("formula" in v || "sharedFormula" in v);
-        if (v === null || v === "" || (isFormula && r > 3)) return;   // ข้ามช่องว่าง/สูตรที่ยังไม่มีข้อมูล
-        any = true;
-        cell.style = Object.assign({}, cell.style, {
-          border: { top: THIN, left: THIN, bottom: THIN, right: THIN },
-          alignment: Object.assign({}, cell.style && cell.style.alignment, { wrapText: true, vertical: (cell.style && cell.style.alignment && cell.style.alignment.vertical) || "middle" }),
-        });
-      });
-      if (any && r >= firstData) row.height = undefined;   // แถวข้อมูล: ให้ Excel ขยายความสูงตามข้อความ
-    }
   }
 
   // sheet name -> part path, from workbook.xml + rels
@@ -73,72 +81,62 @@
       if (blocks.length) { const m = ox.match(CF_BEFORE); ox = ox.slice(0, m.index) + blocks.join("") + ox.slice(m.index); }
       zo.file(po[name], ox);
     }
-    // the restored rules point at the template's dxf list
     const ts = await zt.file("xl/styles.xml").async("string");
     let os = await zo.file("xl/styles.xml").async("string");
-    const tdxfs = (ts.match(/<dxfs\b[\s\S]*?<\/dxfs>|<dxfs\b[^>]*\/>/) || [""])[0];
-    if (/<dxfs\b[\s\S]*?<\/dxfs>|<dxfs\b[^>]*\/>/.test(os)) os = os.replace(/<dxfs\b[\s\S]*?<\/dxfs>|<dxfs\b[^>]*\/>/, tdxfs);
-    else os = os.replace(/<tableStyles\b|<\/styleSheet>/, s => tdxfs + s);
+    const DX = /<dxfs\b[\s\S]*?<\/dxfs>|<dxfs\b[^>]*\/>/;
+    const tdxfs = (ts.match(DX) || [""])[0];
+    os = DX.test(os) ? os.replace(DX, tdxfs) : os.replace(/<tableStyles\b|<\/styleSheet>/, s => tdxfs + s);
     zo.file("xl/styles.xml", os);
     return zo.generateAsync({ type: "uint8array", compression: "DEFLATE" });
   }
 
-  async function fillStorageTemplate(ExcelJS, JSZip, templateBuf, set) {
+  async function fillStorageTemplate(ExcelJS, JSZip, templateBuf, set, sources) {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(templateBuf);
     const rows = [...set.rows].sort((a, b) => String(a.cntr).localeCompare(String(b.cntr)));
-    const uniq = list => [...new Set(list.filter(Boolean))];
+    const cntrs = new Set(rows.map(r => r.cntr)), bks = new Set(rows.map(r => r.bkno));
+    const uniq = list => [...new Set(list.filter(x => x && x.length))];
 
-    // 1-3: raw data (same as pasting the system exports into the template)
-    putRows(wb.getWorksheet("1.Loading"), 2, uniq(rows.map(r => r._r)), 29);
-    putRows(wb.getWorksheet("2.Bookinglist"), 2, uniq(rows.map(r => (r._b && r._b.length ? r._b : null))), 103);
-    putRows(wb.getWorksheet("3.GateMove"), 2, uniq(rows.map(r => r._g)), 37);
+    putRaw(wb.getWorksheet("1.Loading"), pick(sources, "loading", r => cntrs.has(r[0]) && r[10] === "F", uniq(rows.map(r => r._r))), 29);
+    putRaw(wb.getWorksheet("2.Bookinglist"), pick(sources, "booking", r => bks.has(r[0]), uniq(rows.map(r => r._b))), 103);
+    putRaw(wb.getWorksheet("3.GateMove"), pick(sources, "gate", r => cntrs.has(r[0]), uniq(rows.map(r => r._g))), 37);
 
-    const remark = r => (r.ftOverride != null ? `F/T แก้ในแอพ (เดิม ${r.ftDefault})` : (r.ftNote || null));
-
-    // CS: 41 columns A..AO from row 3
-    const wsC = wb.getWorksheet("CS");
+    const ws = wb.getWorksheet("CS");
+    const p = ws.getRow(3), h = p.height;
+    const proto = Array.from({ length: 41 }, (_, j) => { const c = p.getCell(j + 1); return { v: c.value, style: clone(c.style) }; });
+    const manual = { S: r => r.orig, V: r => r.allow, AB: r => r.spft || null, AC: r => r.tml || null, AH: r => r.collect || null };
     rows.forEach((r, i) => {
-      const b = r._b || [], ld = r._r || [];
-      const delay = (r.orig != null && r.etd != null) ? r.etd - r.orig : null;
-      const early = (r.allow != null && r.etd != null) ? r.etd - r.allow + 1 : null;
-      const cells = [
-        [r.cntr], [r.group], [r.loc], [r.bkno], [b[26] ?? r.shipper], [b[27]], [b[4]], [b[14]], [b[18]], [b[25]], [r.tpsz], [b[84]],
-        [r.dg ? "DG" : null], [r.rf ? "RF" : null], [ld[2]], [ld[3]], [r.svc], [r.size],
-        [asDate(r.orig), FMT.date], [asDate(r.etd), FMT.date], [delay, FMT.int], [asDate(r.allow), FMT.date], [asDate(r.din), FMT.date],
-        [r.stay, FMT.int], [r.ft, FMT.int], [r.days, FMT.int], [r.charge, FMT.money], [r.spft || null, FMT.int], [r.tml || null],
-        [r.custFt, FMT.int], [early, FMT.int], [r.over, FMT.int], [r.custAmt, FMT.money], [r.collect || null, FMT.money],
-        [r.charge - (r.collect || 0), FMT.money], [remark(r)], [b[39]], [b[100]], [b[62]], [b[51]], [b[102]]];
-      const xr = wsC.getRow(3 + i);
-      cells.forEach(([v, f], c) => put(xr.getCell(c + 1), v, f));
+      const rr = 3 + i, xr = ws.getRow(rr), cv = cached(r);
+      const ftFixed = r.ftOverride != null;                 // F/T ที่แก้ในแอพ → ใส่เป็นค่า
+      proto.forEach((pc, j) => {
+        const col = colName(j + 1), cell = xr.getCell(j + 1);
+        if (i > 0) cell.style = clone(pc.style);
+        const f = pc.v && typeof pc.v === "object" && pc.v.formula;
+        if (j === 0) cell.value = r.cntr;
+        else if (col === "Y" && ftFixed) cell.value = r.ft;
+        else if (f) cell.value = { formula: translate(f, rr), result: cv[col] !== undefined ? cv[col] : undefined };
+        else if (manual[col]) {
+          const v = manual[col](r);
+          cell.value = (col === "S" || col === "V") ? (v == null ? null : new Date(v * 864e5)) : blank(v);
+        } else if (col === "AJ") cell.value = ftFixed ? `F/T แก้ในแอพ (เดิม ${r.ftDefault})` : null;
+        else cell.value = null;
+      });
+      if (h) xr.height = h;
+    });
+    const tot = k => rows.reduce((t, r) => t + (k(r) || 0), 0);
+    [["AA", r => r.charge], ["AG", r => r.custAmt], ["AH", r => r.collect], ["AI", r => r.charge - (r.collect || 0)]].forEach(([col, k]) => {
+      const c = ws.getCell(col + "1");
+      if (c.value && c.value.formula) c.value = { formula: c.value.formula, result: tot(k) };
     });
 
-    // BKK / LCH: values by header meaning (the template's VLOOKUPs read one column off)
-    const area = rows[0] ? rows[0].area : "BKK";
-    const wsS = wb.getWorksheet(area === "LCH" ? "LCH" : "BKK");
-    rows.forEach((r, i) => {
-      const b = r._b || [], ld = r._r || [];
-      const cells = [
-        [r.cntr], [r.loc], [r.bkno], [b[26] ?? r.shipper], [b[14] ?? ld[7]], [b[18] ?? ld[8]], [r.tpsz], [ld[2]], [ld[3]],
-        [asDate(r.orig), FMT.date], [asDate(r.etd), FMT.date], [(r.orig != null && r.etd != null) ? r.etd - r.orig : null, FMT.int],
-        [asDate(r.din), FMT.date], [asDate(r.etd), FMT.date], [r.stay, FMT.int], [r.ft, FMT.int], [r.days, FMT.int],
-        [r.charge, FMT.money], [r.custFt, FMT.int], [r.custAmt, FMT.money], [r.charge - (r.collect || 0), FMT.money],
-        [remark(r)], [b[39]]];
-      const xr = wsS.getRow(4 + i);
-      cells.forEach(([v, f], c) => put(xr.getCell(c + 1), v, f));
-    });
-
-    const nRaw = { L: uniq(rows.map(r => r._r)).length, B: uniq(rows.map(r => (r._b && r._b.length ? r._b : null))).length, G: uniq(rows.map(r => r._g)).length };
-    gridAndWrap(wb.getWorksheet("1.Loading"), 1 + nRaw.L, 2);
-    gridAndWrap(wb.getWorksheet("2.Bookinglist"), 1 + nRaw.B, 2);
-    gridAndWrap(wb.getWorksheet("3.GateMove"), 1 + nRaw.G, 2);
-    gridAndWrap(wsC, 2 + rows.length, 3);
-    gridAndWrap(wsS, 3 + rows.length, 4);
+    wb.calcProperties = Object.assign({}, wb.calcProperties, { fullCalcOnLoad: true });
+    const ci = wb.worksheets.findIndex(w => w.name === "CS");
+    if (wb.views && wb.views.length) wb.views[0].activeTab = ci; else wb.views = [{ activeTab: ci }];
 
     const out = await wb.xlsx.writeBuffer();
     return restoreConditionalFormatting(JSZip, templateBuf, out);
   }
 
   root.fillStorageTemplate = fillStorageTemplate;
-  if (typeof module !== "undefined") module.exports = { fillStorageTemplate };
+  if (typeof module !== "undefined") module.exports = { fillStorageTemplate, _translate: translate };
 })(typeof window !== "undefined" ? window : globalThis);

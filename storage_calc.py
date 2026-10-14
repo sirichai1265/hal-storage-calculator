@@ -198,7 +198,8 @@ def normalize_bkg(head, rows):
 def classify(path):
     name = os.path.basename(path)
     src = {"path": path, "name": name, "kind": None, "loading": [], "booking": [], "gate": [], "manual": {},
-           "heads": {}}
+           "heads": {}, "raw": {}}
+    nonblank = lambda rows: [list(r) for r in rows if r and any(v not in (None, "") for v in r)]
     try:
         sheets, formulas = read_book(path)
     except Exception as e:  # noqa: BLE001
@@ -209,6 +210,8 @@ def classify(path):
         src["loading"] = clean(sheets["1.Loading"][1:])
         src["booking"] = clean(sheets["2.Bookinglist"][1:])
         bhead, src["booking"], src["bkg_normalized"] = normalize_bkg(sheets["2.Bookinglist"][0], src["booking"])
+        src["raw"] = {"loading": nonblank(sheets["1.Loading"][1:]), "gate": nonblank(sheets["3.GateMove"][1:]),
+                      "booking": normalize_bkg(sheets["2.Bookinglist"][0], nonblank(sheets["2.Bookinglist"][1:]))[1]}
         src["gate"] = clean(sheets["3.GateMove"][1:])
         src["heads"] = {"LOAD": sheets["1.Loading"][0], "BKG": [h for h in bhead if h],
                         "GATE": sheets["3.GateMove"][0]}
@@ -237,8 +240,11 @@ def classify(path):
                     src["kind"] = kind
                     data = clean(rows[h + 1:])
                     head = rows[h]
+                    raw = nonblank(rows[h + 1:])
                     if kind == "BKG":
                         head, data, src["bkg_normalized"] = normalize_bkg(head, data)
+                        raw = normalize_bkg(rows[h], raw)[1]
+                    src["raw"][{"LOAD": "loading", "BKG": "booking", "GATE": "gate"}[kind]] = raw
                     src[{"LOAD": "loading", "BKG": "booking", "GATE": "gate"}[kind]] = data
                     src["heads"][kind] = head
                     break
@@ -592,79 +598,163 @@ INT_COLS = {"Vssl Delay", "Total Stay", "Normal F/T Terminal", "Total Storage Da
             "คืนก่อนเรือออก", "Over F/T Customer"}
 
 
-def write_template_xlsx(path, rows):
-    """ไฟล์ STORAGE TEMPLATE.XLSX ที่เติมข้อมูล 1 เที่ยว (ชีท 1-3 ข้อมูลดิบ, CS, BKK หรือ LCH) เปิดที่ชีท CS
-    — ชีท BKK/LCH ใส่เป็นค่าตามชื่อหัวคอลัมน์ (สูตร VLOOKUP เดิมของ template อ่านเลื่อนไป 1 คอลัมน์)"""
+def _xl_serial(d):
+    return (d - date(1899, 12, 30)).days if d else 0
+
+
+def _cs_cached(x):
+    """ค่าที่สูตรในชีท CS ของ template จะคำนวณได้ (ใส่เป็นค่าแคช ให้เปิดไฟล์แล้วเห็นตัวเลขทันที แม้อยู่ใน Protected View)"""
+    c, b, ld, g = x["cs"], x["bkg"] or pad([]), x["load"], x["gate"] or pad([])
+    z = lambda v: 0 if v in (None, "") else v                    # VLOOKUP ช่องว่าง = 0
+    etd, orig, allow = c["ETD"], c["Original Schedule"], c["1st Date allow to return"]
+    return {
+        "B": c["Group"], "C": c["Location"], "D": c["Booking No."], "E": z(b[26]), "F": z(b[27]), "G": z(b[4]),
+        "H": z(b[14]), "I": z(b[18]), "J": z(b[25]), "K": c["Type Size"], "L": z(b[84]), "M": c["DG"] or "",
+        "N": c["RF"] or "", "O": z(ld[2]), "P": z(ld[3]), "Q": z(b[11]), "R": c["Size"], "T": z(ld[1]),
+        "U": _xl_serial(etd) - _xl_serial(orig), "W": z(g[3]), "X": c["Total Stay"], "Y": c["Normal F/T Terminal"],
+        "Z": c["Total Storage Days"], "AA": c["Total Storage Charge"], "AD": c["Free Time Customer"],
+        "AE": _xl_serial(etd) - _xl_serial(allow) + 1, "AF": c["Over F/T Customer"], "AG": c["Amount due to Customer"],
+        "AI": c["Amount due to HAL"], "AK": z(b[39]), "AL": z(b[100]), "AM": z(b[62]), "AN": z(b[51]), "AO": z(b[102]),
+    }
+
+
+def _inject_cached(path, sheet_title, cached):
+    """ใส่ค่าแคชให้ช่องสูตรของชีท (openpyxl เขียนสูตรโดยไม่มีผลลัพธ์)"""
+    import re
+    import zipfile
+    from xml.sax.saxutils import escape
+    with zipfile.ZipFile(path) as z:
+        parts = {n: z.read(n) for n in z.namelist()}
+    wbx = parts["xl/workbook.xml"].decode("utf-8")
+    rels = parts["xl/_rels/workbook.xml.rels"].decode("utf-8")
+    rid = re.search(r'<sheet\b[^>]*name="' + re.escape(sheet_title) + r'"[^>]*r:id="([^"]+)"', wbx).group(1)
+    target = re.search(r'<Relationship\b[^>]*Id="' + rid + r'"[^>]*Target="([^"]+)"', rels) or \
+        re.search(r'<Relationship\b[^>]*Target="([^"]+)"[^>]*Id="' + rid + '"', rels)
+    part = "xl/" + target.group(1).replace("/xl/", "").lstrip("/")
+    xml = parts[part].decode("utf-8")
+
+    def fix(m):
+        attrs, ref, formula = m.group(1), m.group(2), m.group(3)
+        if ref not in cached:
+            return m.group(0)
+        v = cached[ref]
+        attrs = re.sub(r'\s+t="[^"]*"', "", attrs)
+        if isinstance(v, bool):
+            return f'<c{attrs} t="b"><f>{formula}</f><v>{int(v)}</v></c>'
+        if isinstance(v, (int, float)):
+            return f"<c{attrs}><f>{formula}</f><v>{v}</v></c>"
+        return f'<c{attrs} t="str"><f>{formula}</f><v>{escape(str(v))}</v></c>'
+
+    xml = re.sub(r'<c((?=[^>]*\br="([A-Z]+\d+)")[^>]*)><f>(.*?)</f>(?:<v\s*/>|<v>[^<]*</v>)?</c>', fix, xml, flags=re.S)
+    parts[part] = xml.encode("utf-8")
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        for n, data in parts.items():
+            z.writestr(n, data)
+
+
+def write_template_xlsx(path, rows, sources=None):
+    """ไฟล์ STORAGE TEMPLATE ของ 1 เที่ยว แบบเดียวกับที่ทีมทำใน Excel (ตัวอย่าง 10-14-KUS-2616N-UTCT.xlsx):
+    - 1.Loading / 2.Bookinglist / 3.GateMove = วางข้อมูลจากไฟล์ระบบของเที่ยวนั้น
+    - CS = เลขตู้ในคอลัมน์ A + ลากสูตรจากแถว 3 ของ template ลงมาทุกตู้ (Excel คำนวณเอง) พร้อมค่าแคช
+      ค่าที่แก้เอง (CORRECTIONS.csv / F/T ที่กรอกในชีท CS เดิม) ใส่เป็นค่าแทนสูตรในช่องนั้น
+    - BKK / LCH / Charge ไม่แตะ · เปิดไฟล์ที่ชีท CS"""
     from copy import copy
+    from openpyxl.formula.translate import Translator
     wb = openpyxl.load_workbook(TEMPLATE_FILE)
     rows = sorted(rows, key=lambda x: str(x["cs"]["Container No."]))
+    cntrs = {x["cs"]["Container No."] for x in rows}
+    bks = {x["cs"]["Booking No."] for x in rows}
 
-    def uniq(seq):
-        out, seen = [], set()
-        for x in seq:
-            if x is not None and len(x) and id(x) not in seen:
-                seen.add(id(x))
-                out.append(x)
+    def pick(kind):
+        """วางทั้งไฟล์ของ source ที่มีข้อมูลของเที่ยวนี้ (เหมือนคัดลอกทั้งไฟล์ไปวางใน Excel รวมแถวสรุปท้ายไฟล์ BKG)"""
+        def hit(r):
+            if kind == "loading":
+                return r[0] in cntrs and r[10] == "F"
+            if kind == "booking":
+                return r[0] in bks
+            return r[0] in cntrs
+        out = []
+        for s in sources or []:
+            if any(hit(r) for r in s[kind]):
+                out.extend(s.get("raw", {}).get(kind) or s[kind])
+        if not out:                                   # ไม่มี sources: ใช้แถวที่ผูกกับตู้
+            key = {"loading": "load", "booking": "bkg", "gate": "gate"}[kind]
+            seen = set()
+            for x in rows:
+                r = x[key]
+                if r is not None and len(r) and id(r) not in seen:
+                    seen.add(id(r))
+                    out.append(r)
         return out
 
-    def style(c, fmt=None):
-        c.border = GRID
-        al = copy(c.alignment)
-        al.wrap_text = True
-        al.vertical = al.vertical or "center"
-        c.alignment = al
-        if fmt:
-            c.number_format = fmt
-
-    def fmt_of(h):
-        return FMT_DATE if h in DATE_COLS else "#,##0" if h in MONEY_COLS else "0" if h in INT_COLS else None
+    def copy_style(dst, src):
+        dst.font, dst.border, dst.fill = copy(src.font), copy(src.border), copy(src.fill)
+        dst.number_format, dst.alignment, dst.protection = src.number_format, copy(src.alignment), copy(src.protection)
 
     def put_raw(ws, data, width):
+        proto = [ws.cell(2, j) for j in range(1, width + 1)]
+        h = ws.row_dimensions[2].height
         for i, r in enumerate(data, 2):
             for j in range(width):
+                c = ws.cell(i, j + 1)
                 v = r[j] if j < len(r) else None
-                if v not in (None, ""):
-                    ws.cell(i, j + 1, v)
-        return 1 + len(data)
+                c.value = None if v == "" else v
+                if i > 2:
+                    copy_style(c, proto[j])
+            if h:
+                ws.row_dimensions[i].height = h
 
-    def finish(ws, last, first_data):
-        for r in range(1, last + 1):
-            any_v = False
-            for c in ws[r]:
-                v = c.value
-                if v in (None, "") or (isinstance(v, str) and v.startswith("=") and r > 3):
-                    continue
-                any_v = True
-                style(c)
-            if any_v and r >= first_data:
-                ws.row_dimensions[r].height = None   # ให้ Excel ขยายตามข้อความ (wrap text)
+    put_raw(wb["1.Loading"], pick("loading"), 29)
+    put_raw(wb["2.Bookinglist"], pick("booking"), 103)
+    put_raw(wb["3.GateMove"], pick("gate"), 37)
 
-    last = put_raw(wb["1.Loading"], uniq(x["load"] for x in rows), 29)
-    finish(wb["1.Loading"], last, 2)
-    last = put_raw(wb["2.Bookinglist"], uniq(x["bkg"] for x in rows), 103)
-    finish(wb["2.Bookinglist"], last, 2)
-    last = put_raw(wb["3.GateMove"], uniq(x["gate"] for x in rows), 37)
-    finish(wb["3.GateMove"], last, 2)
-
-    cs_cols = [c for c in CS_COLS if c != "Terminal"]          # = 41 คอลัมน์ของชีท CS ใน template
     ws = wb["CS"]
+    proto = [ws.cell(3, j) for j in range(1, 42)]
+    h = ws.row_dimensions[3].height
+    manual_col = {"S": "Original Schedule", "V": "1st Date allow to return", "AB": "Special F/T",
+                  "AC": "HQ Ref No. / TML / APP BY", "AH": "Collection", "AJ": "Remark"}
+    cached = {}
     for i, x in enumerate(rows, 3):
-        for j, h in enumerate(cs_cols, 1):
-            c = ws.cell(i, j, x["cs"].get(h))
-            style(c, fmt_of(h))
-    finish(ws, 2 + len(rows), 3)
+        c = x["cs"]
+        loc_fixed = c["Location"] != x["load"][13]                       # CORRECTIONS.csv
+        rule_ft = ft_terminal(c["Location"], bool(c["DG"]), c["CGO TERM"])
+        ft_fixed = c["Normal F/T Terminal"] != rule_ft                   # F/T ที่กรอกเองในชีท CS เดิม
+        vals = _cs_cached(x)
+        for j, p in enumerate(proto, 1):
+            col = get_column_letter(j)
+            cell = ws.cell(i, j)
+            if i > 3:
+                copy_style(cell, p)
+            if j == 1:
+                cell.value = c["Container No."]
+            elif col == "C" and loc_fixed:
+                cell.value = c["Location"]
+            elif col == "Y" and ft_fixed:
+                cell.value = c["Normal F/T Terminal"]
+            elif isinstance(p.value, str) and p.value.startswith("="):
+                cell.value = Translator(p.value, origin=f"{col}3").translate_formula(f"{col}{i}")
+                if col in vals:
+                    cached[f"{col}{i}"] = vals[col]
+            elif col in manual_col:
+                v = c.get(manual_col[col])
+                if col == "AJ":                                  # หมายเหตุเฉพาะตู้ที่แก้ค่าเอง
+                    v = c.get("Remark") if (loc_fixed or ft_fixed) else None
+                cell.value = v
+                if isinstance(v, (date, datetime)):
+                    cell.number_format = FMT_DATE
+        if h:
+            ws.row_dimensions[i].height = h
 
-    ws = wb["LCH" if rows and rows[0]["area"] == "LCH" else "BKK"]
-    for i, x in enumerate(rows, 4):
-        for j, h in enumerate(SUMMARY_MAP, 1):
-            c = ws.cell(i, j, x["cs"].get(h))
-            style(c, fmt_of(h))
-    finish(ws, 3 + len(rows), 4)
+    tot = lambda h: sum((x["cs"][h] or 0) for x in rows)       # ผลรวมแถว 1 ของชีท CS
+    cached.update({"AA1": tot("Total Storage Charge"), "AG1": tot("Amount due to Customer"),
+                   "AH1": tot("Collection"), "AI1": tot("Amount due to HAL")})
 
     for w in wb.worksheets:                                       # เปิดไฟล์ที่ชีท CS
         w.sheet_view.tabSelected = (w.title == "CS")
     wb.active = wb.sheetnames.index("CS")
+    wb.calculation.fullCalcOnLoad = True
     wb.save(path)
+    _inject_cached(path, "CS", cached)
 
 
 def write_database(voyages):
@@ -1063,7 +1153,7 @@ def main():
                     "warnings": [w for w in warnings if w.split(":")[0] in cset]}
             write_voyage_xlsx(os.path.join(folder, f"{name}.xlsx"), name, meta, srows, heads)
             if os.path.exists(TEMPLATE_FILE):
-                write_template_xlsx(os.path.join(folder, f"{name}_TEMPLATE.xlsx"), srows)
+                write_template_xlsx(os.path.join(folder, f"{name}_TEMPLATE.xlsx"), srows, sources)
             data = {"meta": meta, "rows": [{k: jsonable(v) for k, v in r["cs"].items()} for r in srows]}
             with open(os.path.join(folder, "data.json"), "w", encoding="utf-8") as fh:
                 json.dump(data, fh, ensure_ascii=False, indent=1)
@@ -1106,7 +1196,7 @@ if __name__ == "__main__":
             srcs = [classify(f) for f in sorted(glob.glob(os.path.join(d, "SOURCE", "*")))]
             rows, _, _ = compute([x for x in srcs if not x.get("error")])
             mine = [r for r in rows if voyage_name(r["key"]) == name]
-            write_template_xlsx(os.path.join(d, f"{name}_TEMPLATE.xlsx"), mine)
+            write_template_xlsx(os.path.join(d, f"{name}_TEMPLATE.xlsx"), mine, [x for x in srcs if not x.get("error")])
             print(f"{name}_TEMPLATE.xlsx  {len(mine)} ตู้  {sum(r['cs']['Total Storage Charge'] for r in mine):,}")
         sys.exit(0)
     if len(sys.argv) > 1 and sys.argv[1] == "--template-js":
