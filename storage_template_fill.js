@@ -57,7 +57,8 @@
     }
     return out;
   }
-  const CF_RE = /<conditionalFormatting\b[\s\S]*?<\/conditionalFormatting>/g;
+  // ExcelJS ทิ้งกฎที่ไม่รองรับไว้เป็นแท็กว่าง <conditionalFormatting .../> (Excel ถือว่าไฟล์เสีย) → ลบทั้งแบบว่างและแบบเต็ม
+  const CF_RE = /<conditionalFormatting\b[^>]*\/>|<conditionalFormatting\b[\s\S]*?<\/conditionalFormatting>/g;
   const CF_BEFORE = /<(dataValidations|hyperlinks|printOptions|pageMargins|pageSetup|headerFooter|rowBreaks|colBreaks|drawing|legacyDrawing|tableParts|extLst)\b|<\/worksheet>/;
 
   async function restoreConditionalFormatting(JSZip, templateBuf, outBuf) {
