@@ -595,7 +595,10 @@ function recompute(){
   SOURCES.filter(s=>s.loading.length).forEach(s=>{
     s.loading.forEach(r=>{
       if(r[10]!=="F") return;
-      const cntr=r[0], loc=r[13], bkno=r[16], tpsz=String(r[4]||"");
+      const cntr=r[0], bkno=r[16], tpsz=String(r[4]||"");
+      let loc=r[13], fixNote="";
+      const fx=FIXES.get(`${String(cntr).toUpperCase()}|${String(bkno||"").toUpperCase()}`);   // CORRECTIONS
+      if(fx&&fx.loc&&fx.loc!==loc){ fixNote=`แก้ Location ${loc} → ${fx.loc} (CORRECTIONS.csv${fx.remark?": "+fx.remark:""})`; loc=fx.loc; }
       const b=bk[bkno]||[]; if(hasBkg&&!bk[bkno]) WARNINGS.push(`${cntr}: ไม่พบ Booking ${bkno}`);
       const gl=gates[cntr]||[], g=gl.find(x=>x[12]===bkno)||gl[0];
       if(hasGate&&!g) WARNINGS.push(`${cntr}: ไม่พบวันตู้เข้าในไฟล์ Gate move`);
@@ -614,7 +617,7 @@ function recompute(){
         ftDefault,ftNote,ftOverride:OVERRIDES.has(key)?OVERRIDES.get(key):null,custFt:custFt(loc,dg,rf,svc),
         custAmt:tierCharge(`CUST|${dg?"DG":"GP"}|${size}`,over),collect:m.collect||0,
         vsl:b[12]||r[2]||"",voyNo:b[13]||r[3]||"",pol:b[14]||r[7]||"",lwharf:b[15]||r[27]||loc||"",
-        orig:toDay(m.orig),allow,over,spft:m.spft||0,tml:m.tml||"",_r:r,_b:b,_g:g||null};
+        orig:toDay(m.orig),allow,over,spft:m.spft||0,tml:m.tml||"",fixNote,_r:r,_b:b,_g:g||null};
       row.setKey=[row.etd,row.svc,row.vsl,row.voyNo,row.pol,row.lwharf].join("|");
       calcRow(row); ROWS.push(row);
     });
@@ -650,6 +653,7 @@ function agg(rows){ return {n:rows.length, over:rows.filter(r=>r.days>0).length,
 
 function renderFiles(){
   recompute();
+  scheduleAutoSave();
   const has=k=>SOURCES.some(s=>s.kind===k||s.kind==="TEMPLATE");
   const slots = SOURCES.length ? `<div class="slots">${["LOAD","BKG","GATE"].map(k=>`<span class="slot ${has(k)?"on":""}"><b>${has(k)?"✓":"·"}</b>${k} <span>${KIND_LABEL[k]}</span></span>`).join("")}</div>` : "";
   $("f-list").innerHTML = SOURCES.length ? slots + SOURCES.map((s,i)=>`<span class="chip ${s.error?"dg":"ok"}" title="${esc(s.error||"")}"><b>${s.kind||"?"}</b> ${esc(s.name)}${s.info?" · "+esc(s.info):""}<button type="button" class="x" data-i="${i}" aria-label="เอาไฟล์ ${esc(s.name)} ออก">×</button></span>`).join("")
@@ -733,7 +737,7 @@ function renderTable(){
     const r=allRows().find(x=>x.cntr===inp.dataset.c&&x.file===inp.dataset.f); if(!r) return;
     const v=inp.value.trim(); r.ftOverride = v===""||Number(v)===r.ftDefault ? null : Math.max(0,parseInt(v)||0);
     if(r.ftOverride==null) OVERRIDES.delete(r.key); else OVERRIDES.set(r.key,r.ftOverride);
-    calcRow(r); renderResults();
+    calcRow(r); renderResults(); scheduleAutoSave();
   }));
 }
 
@@ -813,6 +817,7 @@ function copyTable(){
 /* ------------------------------------------------------------------ dashboard (shared database) */
 // เก็บ 1 เอกสารต่อเที่ยวเรือใน collection "voyages" : {meta, sum, rows}
 let DB=null, DBV=[], DB_STATE="loading", CAN_WRITE=true;
+const FIXES=new Map();      // collection "corrections": <cntr>__<bkno> → {cntr,bkno,loc,remark} (ตรงกับ CORRECTIONS.csv)
 let D_AREA="ALL", D_MONTH="ALL", D_OPEN=null, D_CONFIRM=null;
 const LOC_NAME = code => (LOCS.find(l=>l.code===code)||{}).name || code || "";
 const voyName = r0 => exportName(r0).replace(/\.xlsx$/,"");
@@ -830,11 +835,29 @@ function voyageDoc(set){
     rows:set.rows.map(r=>({cntr:r.cntr,bkno:r.bkno||"",shipper:r.shipper||"",tpsz:r.tpsz,loc:r.loc||"",dg:!!r.dg,rf:!!r.rf,
       din:r.din!=null?isoDay(r.din):null,stay:r.stay,ft:r.ft,days:r.days,charge:r.charge,cust:r.custAmt,
       pol:r._b[14]||r._r[7]||"",pod:r._b[18]||r._r[8]||"",orig:null,cft:r.custFt,hal:r.charge-r.collect,
-      remark:r.ftOverride!=null?`F/T แก้ในแอพ (เดิม ${r.ftDefault})`:(r.ftNote||""),sales:r._b[39]||""}))
+      remark:[r.ftOverride!=null?`F/T แก้ในแอพ (เดิม ${r.ftDefault})`:(r.ftNote||""),r.fixNote||""].filter(Boolean).join(" · "),sales:r._b[39]||""}))
   };
 }
 
-async function saveSets(sets){
+// บันทึกเข้า Dashboard อัตโนมัติเมื่อคำนวณเสร็จ (เฉพาะเที่ยวที่ข้อมูลครบ และมีอะไรเปลี่ยนจากที่อยู่ใน Dashboard)
+let AUTO_T=null, AUTO_BUSY=false;
+const setComplete=set=>set.rows.length&&set.rows.every(r=>r._b&&r._b.length&&r._g&&r.din!=null&&r.etd!=null);
+const docSig=d=>JSON.stringify([(d.rows||[]).map(r=>[r.cntr,r.loc,r.ft,r.days,r.charge,r.din,r.stay]).sort(),d.sum&&d.sum.charge,d.sum&&d.sum.hal]);
+function scheduleAutoSave(){
+  if(!DB||!CAN_WRITE||DB_STATE!=="ok"||!ROWS.length) return;
+  clearTimeout(AUTO_T); AUTO_T=setTimeout(autoSave,1200);
+}
+async function autoSave(){
+  if(AUTO_BUSY){ scheduleAutoSave(); return; }
+  const st=$("x-status"); if(!st) return;
+  const sets=voyageSets(), ready=sets.filter(setComplete), skipped=sets.length-ready.length;
+  const changed=ready.filter(set=>{ const d=voyageDoc(set), cur=DBV.find(v=>v.meta.name===d.meta.name); return !cur||docSig(cur)!==docSig(d); });
+  const note=skipped?` · ไม่ได้บันทึก ${skipped} เที่ยว (ข้อมูลไม่ครบ)`:"";
+  if(!changed.length){ if(ready.length) st.textContent=`✓ Dashboard ตรงกับไฟล์แล้ว${note}`; else if(skipped) st.textContent=`ยังไม่บันทึกเข้า Dashboard: ข้อมูลไม่ครบ (ต้องมี LOAD / BKG / GATE)`; return; }
+  AUTO_BUSY=true; st.textContent="กำลังอัปเดต Dashboard…";
+  try{ await saveSets(changed,true); if(note) st.textContent+=note; } finally{ AUTO_BUSY=false; }
+}
+async function saveSets(sets,auto){
   const st=$("x-status"); if(!DB||!sets.length) return;
   let ok=0;
   for(const set of sets){
@@ -849,7 +872,8 @@ async function saveSets(sets){
       st.textContent=`บันทึก ${d.meta.name} ไม่สำเร็จ ลองอีกครั้ง`; return;
     }
   }
-  st.textContent = ok===1 ? "บันทึกเข้า Dashboard แล้ว" : `บันทึกเข้า Dashboard แล้ว ${ok} เที่ยว`;
+  const what = ok===1 ? voyageDoc(sets[0]).meta.name : `${ok} เที่ยว`;
+  st.textContent = auto ? `✓ อัปเดต Dashboard อัตโนมัติแล้ว: ${what}` : `บันทึกเข้า Dashboard แล้ว: ${what}`;
 }
 function refreshSaveLabels(){
   document.querySelectorAll(".sbtn").forEach(b=>{
@@ -865,9 +889,16 @@ function refreshSaveLabels(){
   if(!DB){ DB_STATE="off"; renderDash(); return; }
   try{ const u=await window.claude.use("user"); if(u){ const c=await u.can("data.write"); if(c===false) CAN_WRITE=false; } }catch(e){}
   $("d-import-lbl").hidden=!CAN_WRITE;
+  DB.collection("corrections").onSnapshot(snap=>{
+    FIXES.clear();
+    snap.docs.forEach(d=>{ const x=d.data()||{}; if(x.cntr&&x.bkno) FIXES.set(`${String(x.cntr).toUpperCase()}|${String(x.bkno).toUpperCase()}`,x); });
+    if(SOURCES.length) renderFiles();
+  }, ()=>{});
   DB.collection("voyages").onSnapshot(snap=>{
+    const first=DB_STATE!=="ok";
     DBV=snap.docs.map(d=>d.data()).filter(v=>v&&v.meta&&v.sum);
     DB_STATE="ok"; renderDash(); refreshSaveLabels();
+    if(first&&ROWS.length) scheduleAutoSave();
   }, ()=>{ DB_STATE="off"; renderDash(); });
 })();
 
