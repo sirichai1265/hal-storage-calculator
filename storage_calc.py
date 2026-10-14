@@ -1140,6 +1140,40 @@ def write_app_raw(out_dir, names=None):
     return done
 
 
+def import_app_raw(json_dir):
+    """python storage_calc.py --import-app <โฟลเดอร์>  — นำเที่ยวที่บันทึกจากแอพ (collection voyage_raw ที่ดาวน์โหลดด้วย
+    ArtifactData out_dir) มาเป็นไฟล์ใน INPUT รูปแบบ TEMPLATE (ชีท 1.Loading / 2.Bookinglist / 3.GateMove) แล้วรันตามปกติ"""
+    files = glob.glob(os.path.join(json_dir, "**", "*__*.json"), recursive=True)
+    by = defaultdict(dict)
+    for f in files:
+        with open(f, encoding="utf-8") as fh:
+            d = json.load(fh)
+        d = d.get("data", d)
+        by[d["voyage"]][d["kind"]] = d["rows"]
+    os.makedirs(INPUT_DIR, exist_ok=True)
+    made = []
+    for name, kinds in sorted(by.items()):
+        if set(kinds) != {"loading", "booking", "gate"}:
+            print(f"ข้าม {name}: ข้อมูลดิบไม่ครบ ({', '.join(sorted(kinds))})")
+            continue
+        wb = openpyxl.load_workbook(TEMPLATE_FILE)            # ใช้หัวคอลัมน์ของ template
+        for sheet, kind in (("1.Loading", "loading"), ("2.Bookinglist", "booking"), ("3.GateMove", "gate")):
+            ws = wb[sheet]
+            for i, r in enumerate(kinds[kind], 2):
+                for j, v in enumerate(r, 1):
+                    if v not in (None, ""):
+                        ws.cell(i, j, v)
+        for sheet in ("CS",):
+            ws = wb[sheet]
+            for row in ws.iter_rows(min_row=3):
+                for c in row:
+                    c.value = None
+        out = os.path.join(INPUT_DIR, f"{name}_FROM_APP.xlsx")
+        wb.save(out)
+        made.append(out)
+    return made
+
+
 def write_template_js(src=None, dst=None):
     """python storage_calc.py --template-js → storage_template.js (STORAGE TEMPLATE.XLSX เป็น base64 สำหรับแอพ)
     รันใหม่ทุกครั้งที่แก้ไฟล์ STORAGE TEMPLATE.XLSX"""
@@ -1244,6 +1278,10 @@ if __name__ == "__main__":
         for n in write_app_raw(sys.argv[2], sys.argv[3:] or None):
             print(n)
         sys.exit(0)
+    if len(sys.argv) > 2 and sys.argv[1] == "--import-app":
+        for f in import_app_raw(sys.argv[2]):
+            print("INPUT:", os.path.basename(f))
+        sys.exit(main())
     if len(sys.argv) > 1 and sys.argv[1] == "--template-js":
         print(write_template_js())
         sys.exit(0)
