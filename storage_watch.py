@@ -132,6 +132,7 @@ def scan(state):
             try:
                 src = sc.classify(path)
                 if src.get("error") or src["kind"] != "TEMPLATE" or not src["loading"]:
+                    log(f"ข้าม {f}: ไม่ใช่ไฟล์ STORAGE TEMPLATE ที่มีข้อมูลเที่ยวเรือ ({src.get('error') or src['kind']})")
                     state[path] = key
                     continue
                 name, sig = file_signature(src)
@@ -142,6 +143,8 @@ def scan(state):
                 state[path] = key
                 continue
             if not name:
+                log(f"ข้าม {f}: ไฟล์มีข้อมูลหลายเที่ยวปนกัน (แอพรุ่นเก่า) หรือไม่พบตู้ Full — บันทึกใหม่จากแอพรุ่นล่าสุด "
+                    "หรือให้ Claude นำเข้าจากฐานข้อมูลแอพ (--import-app)")
                 state[path] = key
                 continue
             if sig == stored_signature(name):
