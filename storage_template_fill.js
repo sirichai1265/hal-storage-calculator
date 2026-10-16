@@ -28,10 +28,24 @@
     };
   }
 
-  // ทั้งไฟล์ของ source ที่มีข้อมูลเที่ยวนี้ (src.raw เก็บแถวท้ายไฟล์ที่ไม่มีเลขตู้ไว้ด้วย)
-  function pick(sources, kind, hit, fallback) {
+  // ข้อมูลดิบของเที่ยวนี้จาก source: ไฟล์ที่มีแต่ข้อมูลเที่ยวนี้ → วางทั้งไฟล์ (รวมแถวท้ายไฟล์) · ไฟล์หลายเที่ยวปนกัน → เฉพาะแถวของเที่ยวนี้
+  const KEYRE = { loading: /^[A-Z]{4}\d{7}$/, gate: /^[A-Z]{4}\d{7}$/, booking: /^HASLS\d/ };
+  function rawFor(s, kind, keys, vkey) {
+    const rows = s[kind] || [];
+    const data = rows.filter(r => KEYRE[kind].test(String(r[0] == null ? "" : r[0]).trim()));
+    // GATE ต้องตรงทั้งเลขตู้และ booking (ตู้ที่เคยเข้า booking เก่า สูตร VLOOKUP จะหยิบแถวเก่า)
+    // ตู้ที่ไม่มีแถวไหน booking ตรงเลย (เช่น booking เปลี่ยน) → เก็บแถวของตู้นั้นไว้ (ตรงกับ storage_calc.py)
+    const cn = kind === "gate" ? new Set([...keys].map(k => k.split("|")[0])) : null;
+    const hasBk = kind === "gate" ? new Set(data.filter(r => r[12] && keys.has(`${r[0]}|${r[12]}`)).map(r => r[0])) : null;
+    const mine = kind === "booking" && vkey ? (r => r[12] === vkey[0] && r[13] === vkey[1] && r[14] === vkey[2])
+      : kind === "gate" ? (r => keys.has(`${r[0]}|${r[12] == null ? "" : r[12]}`) || (cn.has(String(r[0])) && !hasBk.has(r[0]))) : (r => keys.has(r[0]));
+    if (!data.some(mine)) return [];
+    if (data.every(mine)) return (s.raw && s.raw[kind]) || rows;
+    return data.filter(r => mine(r) && (kind !== "loading" || r[10] === "F"));
+  }
+  function pick(sources, kind, keys, fallback, vkey) {
     const out = [];
-    (sources || []).forEach(s => { if ((s[kind] || []).some(hit)) out.push(...((s.raw && s.raw[kind]) || s[kind])); });
+    (sources || []).forEach(s => out.push(...rawFor(s, kind, keys, vkey)));
     return out.length ? out : fallback;
   }
 
@@ -104,12 +118,13 @@
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(templateBuf);
     const rows = [...set.rows].sort((a, b) => String(a.cntr).localeCompare(String(b.cntr)));
-    const cntrs = new Set(rows.map(r => r.cntr)), bks = new Set(rows.map(r => r.bkno));
+    const cntrs = new Set(rows.map(r => r.cntr)), bks = new Set(rows.map(r => r.bkno)), pairs = new Set(rows.flatMap(r => [`${r.cntr}|${r.bkno}`, `${r.cntr}|`]));   // + แถวเติมของระบบ (มีแต่เลขตู้)
+    const vkey = rows[0] && rows[0].vsl != null ? [rows[0].vsl, rows[0].voyNo, rows[0].pol] : null;
     const uniq = list => [...new Set(list.filter(x => x && x.length))];
 
-    putRaw(wb.getWorksheet("1.Loading"), pick(sources, "loading", r => cntrs.has(r[0]) && r[10] === "F", uniq(rows.map(r => r._r))), 29);
-    putRaw(wb.getWorksheet("2.Bookinglist"), pick(sources, "booking", r => bks.has(r[0]), uniq(rows.map(r => r._b))), 103);
-    putRaw(wb.getWorksheet("3.GateMove"), pick(sources, "gate", r => cntrs.has(r[0]), uniq(rows.map(r => r._g))), 37);
+    putRaw(wb.getWorksheet("1.Loading"), pick(sources, "loading", cntrs, uniq(rows.map(r => r._r))), 29);
+    putRaw(wb.getWorksheet("2.Bookinglist"), pick(sources, "booking", bks, uniq(rows.map(r => r._b)), vkey), 103);
+    putRaw(wb.getWorksheet("3.GateMove"), pick(sources, "gate", pairs, uniq(rows.map(r => r._g))), 37);
 
     const ws = wb.getWorksheet("CS");
     const p = ws.getRow(3), h = p.height;

@@ -143,6 +143,7 @@ table{border-collapse:collapse;width:100%}
 .grid tfoot td{background:var(--sunken);font-weight:600;border-top:1px solid var(--line)}
 .ftin{width:58px;min-height:30px;padding:3px 6px;text-align:right;background:var(--sunken);border:1px solid var(--line);border-radius:4px;font-family:var(--f-mono)}
 .ftin.set{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
+.chip.acc{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent}
 .slots{display:flex;flex-wrap:wrap;gap:8px;width:100%}
 .slot{display:inline-flex;gap:6px;align-items:center;padding:5px 10px;border-radius:6px;border:1px dashed var(--line);color:var(--muted);font-weight:600;font-size:13px}
 .slot span{font-weight:400}
@@ -656,7 +657,6 @@ function agg(rows){ return {n:rows.length, over:rows.filter(r=>r.days>0).length,
 
 function renderFiles(){
   recompute();
-  scheduleAutoSave();
   const has=k=>SOURCES.some(s=>s.kind===k||s.kind==="TEMPLATE");
   const slots = SOURCES.length ? `<div class="slots">${["LOAD","BKG","GATE"].map(k=>`<span class="slot ${has(k)?"on":""}"><b>${has(k)?"✓":"·"}</b>${k} <span>${KIND_LABEL[k]}</span></span>`).join("")}</div>` : "";
   $("f-list").innerHTML = SOURCES.length ? slots + SOURCES.map((s,i)=>`<span class="chip ${s.error?"dg":"ok"}" title="${esc(s.error||"")}"><b>${s.kind||"?"}</b> ${esc(s.name)}${s.info?" · "+esc(s.info):""}<button type="button" class="x" data-i="${i}" aria-label="เอาไฟล์ ${esc(s.name)} ออก">×</button></span>`).join("")
@@ -682,17 +682,19 @@ function renderResults(){
 
   // per voyage set (ETD SVC VSL VOY POL LWharf) — one export file each
   const vt = voyageSets().map(v=>{ const s=agg(v.rows); const r0=v.rows[0];
-    return `<tr><td>${r0.area}</td><td class="num">${fmtDay(r0.etd)}</td><td>${esc(r0.svc)}</td><td>${esc(r0.vsl)} ${esc(r0.voyNo)}</td><td>${esc(r0.pol)}</td><td>${esc(r0.lwharf)}</td>
+    const ok=setComplete(v), stt=dashStatus(v);
+    return `<tr><td><input type="checkbox" class="sel" data-k="${esc(v.key)}" ${ok?"":"disabled"} ${ok&&!DESELECT.has(v.key)?"checked":""} aria-label="เลือก ${esc(voyName(r0))}"></td><td>${r0.area}</td><td class="num">${fmtDay(r0.etd)}</td><td>${esc(r0.svc)}</td><td>${esc(r0.vsl)} ${esc(r0.voyNo)}</td><td>${esc(r0.pol)}</td><td>${esc(r0.lwharf)}</td>
       <td class="r num">${s.n}</td><td class="r num">${s.c20}</td><td class="r num">${s.c40}</td><td class="r num">${s.over}</td><td class="r num">${s.days}</td>
       <td class="r num">${money(s.charge)}</td><td class="r num">${money(s.cust)}</td><td class="r num">${money(s.hal)}</td>
-      <td style="display:flex;gap:6px"><button class="btn xbtn" type="button" data-k="${esc(v.key)}" title="${esc(exportName(r0))}">Export</button>
-      <button class="btn sbtn" type="button" data-k="${esc(v.key)}" data-n="${esc(voyName(r0))}" ${DB?"":"hidden"}>บันทึกเข้า Dashboard</button></td></tr>`; }).join("");
+      <td><span class="chip ${stt.c}" data-st="${esc(v.key)}">${stt.t}</span></td>
+      <td><button class="btn xbtn" type="button" data-k="${esc(v.key)}" title="${esc(exportName(r0))}">Export</button></td></tr>`; }).join("");
 
   out.innerHTML = `<div class="areas">${tiles}${grand}</div>
   <div class="section-h"><h2>สรุปตามเที่ยวเรือ</h2>
-    <div class="tools"><span class="total-note" id="x-status" aria-live="polite"></span><button class="btn" type="button" id="s-all" ${DB?"":"hidden"}>บันทึกทั้งหมดเข้า Dashboard</button><button class="btn primary" type="button" id="x-all">Export ทั้งหมด (.xlsx)</button></div>
+    <div class="tools"><span class="total-note" id="x-status" aria-live="polite"></span><label class="check" title="เปิดหน้าต่างบันทึกไฟล์ STORAGE TEMPLATE ทีละเที่ยว เพื่อให้โปรแกรมในเครื่องส่งขึ้น GitHub Dashboard"><input type="checkbox" id="s-gh" checked> ส่งขึ้น GitHub ด้วย (บันทึกไฟล์)</label>
+      <button class="btn primary" type="button" id="s-save" ${DB?"":"hidden"}>บันทึกเข้า Dashboard</button><button class="btn" type="button" id="x-all">Export ทั้งหมด (.xlsx)</button></div>
   </div>
-  <div class="scroll"><table class="grid"><thead><tr><th>พื้นที่</th><th>ETD</th><th>SVC</th><th>VSL / VOY</th><th>POL</th><th>LWharf</th><th class="r">ตู้</th><th class="r">20'</th><th class="r">40'</th><th class="r">เกิน F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th><th class="r">เก็บลูกค้า</th><th class="r">HAL จ่าย</th><th>ไฟล์</th></tr></thead><tbody>${vt}</tbody></table></div>
+  <div class="scroll"><table class="grid"><thead><tr><th><input type="checkbox" id="sel-all" aria-label="เลือกทุกเที่ยว"></th><th>พื้นที่</th><th>ETD</th><th>SVC</th><th>VSL / VOY</th><th>POL</th><th>LWharf</th><th class="r">ตู้</th><th class="r">20'</th><th class="r">40'</th><th class="r">เกิน F/T</th><th class="r">วันคิดเงิน</th><th class="r">ค่า Storage</th><th class="r">เก็บลูกค้า</th><th class="r">HAL จ่าย</th><th>สถานะ Dashboard</th><th>ไฟล์</th></tr></thead><tbody>${vt}</tbody></table></div>
   <p class="total-note" style="margin-top:8px">Export = ไฟล์ STORAGE TEMPLATE ที่เติมข้อมูลครบทุกชีท (1.Loading · 2.Bookinglist · 3.GateMove · CS · BKK/LCH · Charge) · ชื่อไฟล์ = ETD_SVC_VSL_VOY_POL_LWharf เช่น <span class="mono">${esc(exportName(voyageSets()[0].rows[0]))}</span></p>
   <div class="section-h"><h2>รายตู้</h2>
     <div class="tools">
@@ -712,9 +714,11 @@ function renderResults(){
   $("f-copy").onclick=copyTable;
   out.querySelectorAll(".xbtn").forEach(b=>b.onclick=()=>exportSets(voyageSets().filter(v=>v.key===b.dataset.k)));
   $("x-all").onclick=()=>exportSets(voyageSets());
-  out.querySelectorAll(".sbtn").forEach(b=>b.onclick=()=>saveSets(voyageSets().filter(v=>v.key===b.dataset.k)));
-  if($("s-all")) $("s-all").onclick=()=>saveSets(voyageSets());
-  refreshSaveLabels();
+  out.querySelectorAll(".sel").forEach(c=>c.onchange=()=>{ if(c.checked) DESELECT.delete(c.dataset.k); else DESELECT.add(c.dataset.k); updateSaveBar(); });
+  $("sel-all").onchange=e=>{ voyageSets().filter(setComplete).forEach(v=>{ if(e.target.checked) DESELECT.delete(v.key); else DESELECT.add(v.key); });
+    out.querySelectorAll(".sel:not(:disabled)").forEach(c=>c.checked=e.target.checked); updateSaveBar(); };
+  $("s-save").onclick=saveSelected;
+  updateSaveBar();
   renderTable();
 }
 
@@ -740,7 +744,7 @@ function renderTable(){
     const r=allRows().find(x=>x.cntr===inp.dataset.c&&x.file===inp.dataset.f); if(!r) return;
     const v=inp.value.trim(); r.ftOverride = v===""||Number(v)===r.ftDefault ? null : Math.max(0,parseInt(v)||0);
     if(r.ftOverride==null) OVERRIDES.delete(r.key); else OVERRIDES.set(r.key,r.ftOverride);
-    calcRow(r); renderResults(); scheduleAutoSave();
+    calcRow(r); renderResults();
   }));
 }
 
@@ -847,64 +851,72 @@ function voyageDoc(set){
   };
 }
 
-// บันทึกเข้า Dashboard อัตโนมัติเมื่อคำนวณเสร็จ (เฉพาะเที่ยวที่ข้อมูลครบ และมีอะไรเปลี่ยนจากที่อยู่ใน Dashboard)
-let AUTO_T=null, AUTO_BUSY=false;
+// เลือกเที่ยวที่จะบันทึกเข้า Dashboard (ติ๊กที่ตาราง แล้วกดปุ่ม "บันทึกเข้า Dashboard") — ไม่บันทึกอัตโนมัติ
+const DESELECT=new Set();     // เที่ยวที่ผู้ใช้เอาติ๊กออก (key = voyageSets().key)
 const setComplete=set=>set.rows.length&&set.rows.every(r=>r._b&&r._b.length&&r._g&&r.din!=null&&r.etd!=null);
 const docSig=d=>JSON.stringify([(d.rows||[]).map(r=>[r.cntr,r.loc,r.ft,r.days,r.charge,r.din,r.stay]).sort(),d.sum&&d.sum.charge,d.sum&&d.sum.hal]);
-function scheduleAutoSave(){
-  if(!DB||!CAN_WRITE||DB_STATE!=="ok"||!ROWS.length) return;
-  clearTimeout(AUTO_T); AUTO_T=setTimeout(autoSave,1200);
+function dashStatus(set){          // สถานะเทียบกับที่อยู่ใน Dashboard
+  if(!setComplete(set)) return {t:"ข้อมูลไม่ครบ",c:"dg"};
+  const d=voyageDoc(set), cur=DBV.find(v=>v.meta.name===d.meta.name);
+  if(!cur) return {t:"ใหม่",c:"acc"};
+  return docSig(cur)===docSig(d)?{t:"ตรงกับ Dashboard",c:"ok"}:{t:"ต่างจาก Dashboard",c:"acc"};
 }
-async function autoSave(){
-  if(AUTO_BUSY){ scheduleAutoSave(); return; }
-  const st=$("x-status"); if(!st) return;
-  const sets=voyageSets(), ready=sets.filter(setComplete), skipped=sets.length-ready.length;
-  const changed=ready.filter(set=>{ const d=voyageDoc(set), cur=DBV.find(v=>v.meta.name===d.meta.name); return !cur||docSig(cur)!==docSig(d); });
-  const note=skipped?` · ไม่ได้บันทึก ${skipped} เที่ยว (ข้อมูลไม่ครบ)`:"";
-  if(!changed.length){ if(ready.length) st.textContent=`✓ Dashboard ตรงกับไฟล์แล้ว${note}`; else if(skipped) st.textContent=`ยังไม่บันทึกเข้า Dashboard: ข้อมูลไม่ครบ (ต้องมี LOAD / BKG / GATE)`; return; }
-  AUTO_BUSY=true; st.textContent="กำลังอัปเดต Dashboard…";
-  try{
-    await saveSets(changed,true);
+const selectedSets=()=>voyageSets().filter(v=>setComplete(v)&&!DESELECT.has(v.key));
+function updateSaveBar(){
+  const sets=voyageSets(), sel=selectedSets(), btn=$("s-save"); if(!btn) return;
+  sets.forEach(v=>{ const el=document.querySelector(`[data-st="${CSS.escape(v.key)}"]`); if(el){ const x=dashStatus(v); el.className=`chip ${x.c}`; el.textContent=x.t; } });
+  const all=$("sel-all"); if(all){ const ok=sets.filter(setComplete); all.checked=ok.length>0&&ok.every(v=>!DESELECT.has(v.key)); all.disabled=!ok.length; }
+  const can=DB&&CAN_WRITE&&DB_STATE==="ok";
+  btn.disabled=!can||!sel.length;
+  btn.textContent=`บันทึกเข้า Dashboard${sel.length?` (${sel.length} เที่ยว)`:""}`;
+  btn.title=!DB?"ยังไม่ได้เชื่อมฐานข้อมูล":!CAN_WRITE?"บัญชีนี้ไม่มีสิทธิ์แก้ข้อมูลใน Dashboard":!sel.length?"ติ๊กเลือกเที่ยวที่จะบันทึก":"";
+}
+async function saveSelected(){
+  const st=$("x-status"), sets=selectedSets(); if(!sets.length||!DB) return;
+  const withFile=$("s-gh")&&$("s-gh").checked;
+  $("s-save").disabled=true; st.textContent=`กำลังบันทึก ${sets.length} เที่ยวเข้า Dashboard…`;
+  const done=await saveSets(sets);
+  if(done&&done.length&&withFile){
     const saved=st.textContent;
-    // บันทึกไฟล์ STORAGE TEMPLATE (กด Save 1 ครั้ง) → โปรแกรม storage_watch.py ในเครื่องซิงก์ขึ้น GitHub Dashboard ให้
-    await exportSets(changed);
+    st.textContent=`${saved} · กรุณาบันทึกไฟล์ STORAGE TEMPLATE ทีละเที่ยว (${done.length} ไฟล์) เพื่อส่งขึ้น GitHub Dashboard`;
+    await exportSets(done);
     const r=st.textContent;
-    st.textContent = /บันทึกแล้ว/.test(r) ? `${saved.split(" · ")[0]} · บันทึกไฟล์แล้ว → GitHub Dashboard จะอัปเดตใน ~1 นาที${note}`
-      : /ยกเลิก/.test(r) ? `${saved.split(" · ")[0]} · ยังไม่ได้บันทึกไฟล์ GitHub Dashboard จึงยังไม่อัปเดต (กด Export เพื่อบันทึกไฟล์)${note}`
-      : `${saved.split(" · ")[0]} · ${r}${note}`;
-  } finally{ AUTO_BUSY=false; }
+    st.textContent=/บันทึกแล้ว/.test(r)?`${saved} · บันทึกไฟล์แล้ว → GitHub Dashboard จะอัปเดตใน ~1 นาที`
+      :/ยกเลิก/.test(r)?`${saved} · ยังไม่ได้บันทึกไฟล์ → GitHub Dashboard ยังไม่อัปเดต (กด Export เพื่อบันทึกไฟล์)`:`${saved} · ${r}`;
+  }
+  updateSaveBar();
 }
-async function saveSets(sets,auto){
-  const st=$("x-status"); if(!DB||!sets.length) return;
-  let ok=0;
+async function saveSets(sets){
+  const st=$("x-status"); if(!DB||!sets.length) return [];
+  const done=[];
   for(const set of sets){
-    const d=voyageDoc(set);
-    try{ await DB.collection("voyages").doc(docId(d.meta.name)).set(d);
+    const d=voyageDoc(set), id=docId(d.meta.name);
+    try{
       const raw=voyageRaw(set);
-      for(const k of RAW_KINDS) await DB.collection("voyage_raw").doc(`${docId(d.meta.name)}__${k}`).set({voyage:d.meta.name,kind:k,rows:raw[k]});
-      ok++; }
-    catch(e){
-      if(e&&e.code==="invalid_argument"){ CAN_WRITE=false; st.textContent="บัญชีนี้ดูได้อย่างเดียว บันทึกเข้า Dashboard ไม่ได้"; refreshSaveLabels(); return; }
-      if(e&&e.code==="quota_exceeded"){ st.textContent="ฐานข้อมูลเต็ม ลบเที่ยวเรือเก่าในแท็บ Dashboard ก่อน"; return; }
-      st.textContent=`บันทึก ${d.meta.name} ไม่สำเร็จ ลองอีกครั้ง`; return;
+      for(const k of RAW_KINDS){ const doc={voyage:d.meta.name,kind:k,rows:raw[k]}, kb=JSON.stringify(doc).length/1024;
+        if(kb>240) throw Object.assign(new Error(`ข้อมูลดิบ ${k} ใหญ่เกินไป (${Math.round(kb)} KB)`),{code:"toobig"}); }
+      await DB.collection("voyages").doc(id).set(d);
+      for(const k of RAW_KINDS) await DB.collection("voyage_raw").doc(`${id}__${k}`).set({voyage:d.meta.name,kind:k,rows:raw[k]});
+      done.push(set);
+    }catch(e){
+      const c=e&&e.code;
+      st.textContent = c==="quota_exceeded" ? "ฐานข้อมูลเต็ม ลบเที่ยวเรือเก่าในแท็บ Dashboard ก่อน"
+        : c==="toobig" ? `บันทึก ${d.meta.name} ไม่ได้: ${e.message}`
+        : c==="invalid_argument" ? `บันทึก ${d.meta.name} ไม่ได้: ฐานข้อมูลปฏิเสธข้อมูล (${(e.message||"").slice(0,80)}) ถ้าเกิดกับทุกเที่ยว บัญชีนี้อาจไม่มีสิทธิ์แก้ข้อมูล`
+        : `บันทึก ${d.meta.name} ไม่สำเร็จ ลองอีกครั้ง`;
+      updateSaveBar(); return done;
     }
   }
-  const what = ok===1 ? voyageDoc(sets[0]).meta.name : `${ok} เที่ยว`;
-  st.textContent = auto ? `✓ อัปเดต Dashboard อัตโนมัติแล้ว: ${what}` : `บันทึกเข้า Dashboard แล้ว: ${what}`;
+  st.textContent=`บันทึกเข้า Dashboard แล้ว: ${done.length===1?voyageDoc(done[0]).meta.name:done.length+" เที่ยว"}`;
+  return done;
 }
-function refreshSaveLabels(){
-  document.querySelectorAll(".sbtn").forEach(b=>{
-    b.hidden=!DB||!CAN_WRITE;
-    b.textContent = DBV.some(v=>v.meta&&v.meta.name===b.dataset.n) ? "อัปเดตใน Dashboard" : "บันทึกเข้า Dashboard";
-  });
-  const all=$("s-all"); if(all) all.hidden=!DB||!CAN_WRITE;
-}
+function refreshSaveLabels(){ updateSaveBar(); }
 
 (async function initDb(){
   if(!window.claude||!window.claude.use){ DB_STATE="local"; renderDash(); return; }
   try{ DB=await window.claude.use("db"); }catch(e){ DB=null; }
   if(!DB){ DB_STATE="off"; renderDash(); return; }
-  try{ const u=await window.claude.use("user"); if(u){ const c=await u.can("data.write"); if(c===false) CAN_WRITE=false; } }catch(e){}
+  try{ const u=await window.claude.use("user"); if(u){ const c=await u.can("data.write"); if(c===false) CAN_WRITE=false; } }catch(e){}   // สิทธิ์ดูจาก user.can เท่านั้น (ไม่เดาจาก error)
   $("d-import-lbl").hidden=!CAN_WRITE;
   DB.collection("corrections").onSnapshot(snap=>{
     FIXES.clear();
@@ -914,8 +926,7 @@ function refreshSaveLabels(){
   DB.collection("voyages").onSnapshot(snap=>{
     const first=DB_STATE!=="ok";
     DBV=snap.docs.map(d=>d.data()).filter(v=>v&&v.meta&&v.sum);
-    DB_STATE="ok"; renderDash(); refreshSaveLabels(); renderGh();
-    if(first&&ROWS.length) scheduleAutoSave();
+    DB_STATE="ok"; renderDash(); updateSaveBar(); renderGh();
   }, ()=>{ DB_STATE="off"; renderDash(); });
 })();
 
@@ -1072,12 +1083,24 @@ function summaryWorkbook(voyages){   // รูปแบบ STORAGE TEMPLATE: ช
 // ข้อมูลดิบต่อเที่ยวเก็บใน collection "voyage_raw" (doc <ชื่อเที่ยว>__loading / __booking / __gate)
 const RAW_KINDS=["loading","booking","gate"];
 const jsonCell=v=>v===undefined?null:v;
-function voyageRaw(set){                       // ทั้งไฟล์ของ source ที่มีข้อมูลเที่ยวนี้ (เหมือนที่วางลง template)
+const RAW_KEYRE={loading:/^[A-Z]{4}\d{7}$/,gate:/^[A-Z]{4}\d{7}$/,booking:/^HASLS\d/};
+// ข้อมูลดิบของเที่ยวนี้จาก source: ไฟล์ที่มีแต่ข้อมูลเที่ยวนี้ → ทั้งไฟล์ (รวมแถวท้ายไฟล์) · ไฟล์หลายเที่ยวปนกัน → เฉพาะแถวของเที่ยวนี้
+// (ต้องตรงกับ rawFor ใน storage_template_fill.js และ raw_for ใน storage_calc.py)
+function rawForVoyage(s,kind,keys,vkey){
+  const rows=s[kind]||[], data=rows.filter(r=>RAW_KEYRE[kind].test(String(r[0]==null?"":r[0]).trim()));
+  const cn=kind==="gate"?new Set([...keys].map(k=>k.split("|")[0])):null, hasBk=kind==="gate"?new Set(data.filter(r=>r[12]&&keys.has(`${r[0]}|${r[12]}`)).map(r=>r[0])):null;   // ตู้ที่ booking ไม่ตรงเลย → เก็บแถวไว้
+  const mine=kind==="booking"&&vkey?(r=>r[12]===vkey[0]&&r[13]===vkey[1]&&r[14]===vkey[2]):kind==="gate"?(r=>keys.has(`${r[0]}|${r[12]==null?"":r[12]}`)||(cn.has(String(r[0]))&&!hasBk.has(r[0]))):(r=>keys.has(r[0]));
+  if(!data.some(mine)) return [];
+  if(data.every(mine)) return (s.raw&&s.raw[kind])||rows;
+  return data.filter(r=>mine(r)&&(kind!=="loading"||r[10]==="F"));
+}
+function voyageRaw(set){
   const cntrs=new Set(set.rows.map(r=>r.cntr)), bks=new Set(set.rows.map(r=>r.bkno));
-  const hit={loading:r=>cntrs.has(r[0])&&r[10]==="F",booking:r=>bks.has(r[0]),gate:r=>cntrs.has(r[0])};
-  const out={};
+  const r0=set.rows[0], vkey=r0&&r0.vsl!=null?[r0.vsl,r0.voyNo,r0.pol]:null;
+  const pairs=new Set(set.rows.flatMap(r=>[`${r.cntr}|${r.bkno}`,`${r.cntr}|`]));   // + แถวเติมของระบบ (มีแต่เลขตู้)
+  const keys={loading:cntrs,gate:pairs,booking:bks}, out={};
   RAW_KINDS.forEach(k=>{ const rows=[];
-    SOURCES.forEach(s=>{ if((s[k]||[]).some(hit[k])) rows.push(...((s.raw&&s.raw[k])||s[k])); });
+    SOURCES.forEach(s=>rows.push(...rawForVoyage(s,k,keys[k],vkey)));
     out[k]=rows.map(r=>{ const a=Array.from(r||[],jsonCell); while(a.length&&(a[a.length-1]==null||a[a.length-1]==="")) a.pop(); return a; });
   });
   return out;
@@ -1105,7 +1128,7 @@ function setFromDoc(v,raw){
       size:String(d.tpsz||"").startsWith("22")?"20'":"40'",svc:b[11]||(ld&&ld[19])||"",dg,rf:!!d.rf,
       etd,orig:d.orig?dayFromISO(d.orig):null,allow:null,din:d.din?dayFromISO(d.din):null,stay:d.stay,
       ft:d.ft,ftDefault:rule,ftOverride:d.ft!==rule?d.ft:null,days:d.days,charge,spft:0,tml:"",
-      custFt:d.cft,over:0,custAmt:d.cust||0,collect:charge-hal,fixNote:d.remark||null,_r:ld,_b:b,_g:g};
+      custFt:d.cft,over:0,custAmt:d.cust||0,collect:charge-hal,fixNote:d.remark||null,vsl:v.meta.vsl,voyNo:v.meta.voy,pol:v.meta.pol,_r:ld,_b:b,_g:g};
   });
   return {rows};
 }

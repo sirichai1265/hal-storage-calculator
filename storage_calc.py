@@ -16,6 +16,7 @@
 import glob
 import html
 import json
+import re
 import os
 import shutil
 import sys
@@ -664,19 +665,14 @@ def write_template_xlsx(path, rows, sources=None):
     rows = sorted(rows, key=lambda x: str(x["cs"]["Container No."]))
     cntrs = {x["cs"]["Container No."] for x in rows}
     bks = {x["cs"]["Booking No."] for x in rows}
+    pairs = {(x["cs"]["Container No."], x["cs"]["Booking No."]) for x in rows} | {(x["cs"]["Container No."], "") for x in rows}
 
     def pick(kind):
-        """วางทั้งไฟล์ของ source ที่มีข้อมูลของเที่ยวนี้ (เหมือนคัดลอกทั้งไฟล์ไปวางใน Excel รวมแถวสรุปท้ายไฟล์ BKG)"""
-        def hit(r):
-            if kind == "loading":
-                return r[0] in cntrs and r[10] == "F"
-            if kind == "booking":
-                return r[0] in bks
-            return r[0] in cntrs
+        keys = bks if kind == "booking" else pairs if kind == "gate" else cntrs
+        vkey = (rows[0]["key"][2], rows[0]["key"][3], rows[0]["key"][4]) if rows else None
         out = []
         for s in sources or []:
-            if any(hit(r) for r in s[kind]):
-                out.extend(s.get("raw", {}).get(kind) or s[kind])
+            out.extend(raw_for(s, kind, keys, vkey))
         if not out:                                   # ไม่มี sources: ใช้แถวที่ผูกกับตู้
             key = {"loading": "load", "booking": "bkg", "gate": "gate"}[kind]
             seen = set()
@@ -1100,18 +1096,44 @@ def write_app_docs(out_dir, names=None):
     return done
 
 
+_KEY_RE = {"loading": re.compile(r"^[A-Z]{4}\d{7}$"), "gate": re.compile(r"^[A-Z]{4}\d{7}$"), "booking": re.compile(r"^HASLS\d")}
+
+
+def raw_for(src, kind, keys, vkey=None):
+    """ข้อมูลดิบของ 1 เที่ยวจาก source 1 ไฟล์: ถ้าไฟล์มีแต่ข้อมูลของเที่ยวนี้ → วางทั้งไฟล์ (รวมแถวสรุปท้ายไฟล์)
+    แต่ถ้าไฟล์มีหลายเที่ยวปนกัน → เฉพาะแถวของเที่ยวนี้ (ไม่งั้นแต่ละเที่ยวจะได้ข้อมูลของทุกเที่ยว)
+    LOAD/GATE: แถวของเที่ยวนี้ = เลขตู้อยู่ใน keys · BKG: แถวของเที่ยวนี้ = (VSL, VOY, POL) ตรงกับ vkey
+    (booking ที่ยังไม่มีตู้โหลดก็เป็นของเที่ยวนี้ ต้องอยู่ในชีทด้วย)"""
+    rows = src[kind]
+    data = [r for r in rows if _KEY_RE[kind].match(str(r[0] or "").strip())]
+    if kind == "booking" and vkey:
+        mine = lambda r: (r[12], r[13], r[14]) == vkey
+    elif kind == "gate":                              # GATE: ต้องตรงทั้งเลขตู้และ booking (ตู้ที่เคยเข้า booking เก่า สูตร VLOOKUP จะหยิบแถวเก่า)
+        cn = {c for c, _ in keys}
+        has_bk = {r[0] for r in data if r[12] and (r[0], r[12]) in keys}
+        # ตู้ที่ไม่มีแถวไหน booking ตรงเลย (เช่น booking เปลี่ยน) → เก็บแถวของตู้นั้นไว้ ตามที่ compute() ใช้เป็นทางเลือกสำรอง
+        mine = lambda r: (r[0], r[12] or "") in keys or (r[0] in cn and r[0] not in has_bk)
+    else:
+        mine = lambda r: r[0] in keys
+    if not any(mine(r) for r in data):
+        return []
+    if all(mine(r) for r in data):
+        return src.get("raw", {}).get(kind) or rows
+    return [r for r in data if mine(r) and (kind != "loading" or r[10] == "F")]
+
+
 def voyage_raw(rows, sources):
     """ข้อมูลดิบของเที่ยว (ทั้งไฟล์ LOAD / BKG / GATE ที่มีข้อมูลของเที่ยวนี้ รวมแถวสรุปท้ายไฟล์) — ชุดเดียวกับที่วางลง template"""
     cntrs = {x["cs"]["Container No."] for x in rows}
     bks = {x["cs"]["Booking No."] for x in rows}
-    hit = {"loading": lambda r: r[0] in cntrs and r[10] == "F", "booking": lambda r: r[0] in bks,
-           "gate": lambda r: r[0] in cntrs}
+    pairs = {(x["cs"]["Container No."], x["cs"]["Booking No."]) for x in rows} | {(x["cs"]["Container No."], "") for x in rows}
+    keys = {"loading": cntrs, "booking": bks, "gate": pairs}
+    vkey = (rows[0]["key"][2], rows[0]["key"][3], rows[0]["key"][4]) if rows else None
     out = {}
     for kind in ("loading", "booking", "gate"):
         data = []
         for s in sources:
-            if any(hit[kind](r) for r in s[kind]):
-                data.extend(s.get("raw", {}).get(kind) or s[kind])
+            data.extend(raw_for(s, kind, keys[kind], vkey))
         out[kind] = data
     return out
 
