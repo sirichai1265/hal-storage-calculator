@@ -92,6 +92,11 @@ DASHBOARD.html                 dashboard รวมทุกเที่ยว
 - CORRECTIONS ใช้ในแอพด้วย (collection `corrections` ในฐานข้อมูลแอพ ต้องตรงกับ `CORRECTIONS.csv`)
 - นำเที่ยวจากฐานข้อมูลแอพเข้าระบบด้วยมือ: ดาวน์โหลด collection `voyage_raw` แล้ว `python storage_calc.py --import-app <โฟลเดอร์>`
 
+## ไฟล์ GATE รูปแบบใหม่
+
+ตั้งแต่ 17/10/2026 ไฟล์ GATE บางชุดสลับคอลัมน์ A/B เป็น `Location, Container No` (เดิม `Container No, Location`)
+โปรแกรมและแอพ**สลับกลับเป็นรูปแบบเดิมอัตโนมัติ** (ข้อความ "GATE รูปแบบใหม่" ตอนรัน · ไฟล์ต้นฉบับไม่ถูกแก้ · ชีท 3.GateMove ในไฟล์ template เป็นรูปแบบเดิม)
+
 ## หลักการคำนวณ
 
 - วันอยู่ใน terminal = ETD − วันตู้เข้า (Gate in) + 1

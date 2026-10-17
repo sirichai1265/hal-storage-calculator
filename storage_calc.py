@@ -178,6 +178,14 @@ def clean(rows):
     return [pad(r) for r in rows if r and r[0] is not None and str(r[0]).strip() != ""]
 
 
+def swap_gate_cols(row):
+    """GATE รุ่นใหม่: คอลัมน์ A = Location, B = Container No (เดิมกลับกัน) → สลับกลับเป็นรูปแบบเดิม"""
+    r = list(row)
+    if len(r) > 1:
+        r[0], r[1] = r[1], r[0]
+    return r
+
+
 def normalize_bkg(head, rows):
     """BKG รุ่นใหม่ (104 คอลัมน์): ลบคอลัมน์ BN "Roll Over" และย้าย BP "Roll Over Remark" ไปต่อท้าย (หลัง CZ)
     ให้กลับเป็นรูปแบบเดิม 103 คอลัมน์ที่โปรแกรมและสูตร TEMPLATE อ้างอิงตามตำแหน่ง"""
@@ -237,11 +245,15 @@ def classify(path):
                     kind = "LOAD"
                 elif hdr and hdr[0] == "Container No" and "GateDate" in hdr:
                     kind = "GATE"
+                elif len(hdr) > 1 and hdr[0] == "Location" and hdr[1] == "Container No" and "GateDate" in hdr:
+                    kind = "GATE"
+                    src["gate_normalized"] = True
                 if kind:
                     src["kind"] = kind
-                    data = clean(rows[h + 1:])
-                    head = rows[h]
-                    raw = nonblank(rows[h + 1:])
+                    body = [swap_gate_cols(r) for r in rows[h + 1:]] if src.get("gate_normalized") else rows[h + 1:]
+                    data = clean(body)
+                    head = swap_gate_cols(rows[h]) if src.get("gate_normalized") else rows[h]
+                    raw = nonblank(body)
                     if kind == "BKG":
                         head, data, src["bkg_normalized"] = normalize_bkg(head, data)
                         raw = normalize_bkg(rows[h], raw)[1]
@@ -1220,7 +1232,8 @@ def main():
     sources = [classify(f) for f in files]
     for s in sources:
         print(f"  [{s['kind'] or 'X':8s}] {s['name']}" + (f"  !! {s['error']}" if s.get("error") else "")
-              + ("  (BKG รูปแบบใหม่: ลบ BN Roll Over / ย้าย BP Roll Over Remark ไปท้าย)" if s.get("bkg_normalized") else ""))
+              + ("  (BKG รูปแบบใหม่: ลบ BN Roll Over / ย้าย BP Roll Over Remark ไปท้าย)" if s.get("bkg_normalized") else "")
+              + ("  (GATE รูปแบบใหม่: สลับคอลัมน์ Location / Container No กลับ)" if s.get("gate_normalized") else ""))
     sources = [s for s in sources if not s.get("error")]
 
     kinds = {s["kind"] for s in sources}

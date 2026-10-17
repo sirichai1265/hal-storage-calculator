@@ -565,12 +565,16 @@ function classify(wb,name){
         if(hdr[0]==="B/K No") kind="BKG";
         else if(hdr[0]==="Container No."&&hdr.includes("EQ Date")) kind="LOAD";
         else if(hdr[0]==="Container No"&&hdr.includes("GateDate")) kind="GATE";
+        else if(hdr[0]==="Location"&&hdr[1]==="Container No"&&hdr.includes("GateDate")){ kind="GATE"; src.gateNormalized=true; }   // GATE รุ่นใหม่: สลับคอลัมน์ A/B กลับ
         if(kind){
-          src.kind=kind; const data=clean(rows.slice(h+1));
-          const raw=nonblank(rows.slice(h+1));
+          src.kind=kind;
+          const swap=r=>{ if(!src.gateNormalized||!r||r.length<2) return r; const x=r.slice(); [x[0],x[1]]=[x[1],x[0]]; return x; };
+          const body=rows.slice(h+1).map(swap), hrow=swap(rows[h]);
+          const data=clean(body);
+          const raw=nonblank(body);
           if(kind==="LOAD"){ src.loading=data; src.raw.loading=raw; }
           else if(kind==="BKG"){ const nb=normalizeBkg(rows[h],data); src.booking=nb.rows; src.bkgNormalized=nb.changed; BKG_HEAD=nb.head; src.raw.booking=normalizeBkg(rows[h],raw).rows; }
-          else { src.gate=data; GATE_HEAD=rows[h]; src.raw.gate=raw; }
+          else { src.gate=data; GATE_HEAD=hrow; src.raw.gate=raw; }
           break;
         }
       }
@@ -583,7 +587,7 @@ function classify(wb,name){
     const v=[...new Set(full.map(r=>`${r[2]} ${r[3]}`))];
     src.info=`${v.join(", ")||"–"} · ${full.length} ตู้`;
   } else if(src.kind==="BKG") src.info=`${src.booking.length} booking${src.bkgNormalized?" · ปรับรูปแบบใหม่":""}`;
-  else src.info=`${src.gate.length} รายการ`;
+  else src.info=`${src.gate.length} รายการ${src.gateNormalized?" · ปรับรูปแบบใหม่":""}`;
   return src;
 }
 
