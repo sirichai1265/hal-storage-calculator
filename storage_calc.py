@@ -34,6 +34,7 @@ VOY_DIR = os.path.join(BASE, "VOYAGES")
 DB_DIR = os.path.join(BASE, "DATABASE")
 DB_FILE = os.path.join(DB_DIR, "STORAGE_DATABASE.xlsx")
 MASTER_DASH = os.path.join(BASE, "DASHBOARD.html")
+APP_URL = "https://claude.ai/artifact/X1NwK1c6Vf26JNXF4vTHkj"   # HAL Storage Calculator (ทางลัดใน dashboard)
 CORRECTIONS_FILE = os.path.join(BASE, "CORRECTIONS.csv")  # แก้ข้อมูลรายตู้ (Container No. + Booking No.)
 
 # ---------------------------------------------------------------- Tariff (ชีท Charge)
@@ -824,6 +825,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.5 Tahoma,"Segoe 
 .num{font-variant-numeric:tabular-nums}
 header{background:var(--head);color:var(--head-ink);padding:18px 16px 16px}
 .wrap{max-width:1180px;margin:0 auto}
+.head-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px 20px}
+.appbtn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#1B1206;font-weight:bold;text-decoration:none;padding:9px 16px;border-radius:8px;border:1px solid transparent;white-space:nowrap}
+.appbtn:hover{filter:brightness(1.08)}.appbtn:focus-visible{outline:2px solid var(--head-ink);outline-offset:2px}
 header h1{margin:0;font-size:20px;letter-spacing:.01em}
 header h1 b{color:var(--accent)}
 header p{margin:4px 0 0;color:var(--head-muted)}
@@ -912,7 +916,8 @@ def page(title, header_html, body):
 def voyage_dashboard(meta, rows):
     s = summarize(rows)
     cs = sorted(rows, key=lambda c: (-(c["Total Stay"] or 0), c["Container No."]))
-    hdr = (f'<h1>Storage Dashboard · <b>{e(meta["vsl"])} {e(meta["voy"])}</b></h1><p>{e(meta["name"])}</p>'
+    hdr = (f'<div class="head-row"><div><h1>Storage Dashboard · <b>{e(meta["vsl"])} {e(meta["voy"])}</b></h1>'
+           f'<p>{e(meta["name"])}</p></div>{app_button()}</div>'
            '<div class="meta">' + "".join(
                f'<div><span>{k}</span><strong>{e(v)}</strong></div>' for k, v in
                [("ETD", dmy(meta["etd"])), ("SVC", meta["svc"]), ("POL", meta["pol"]), ("LWharf", meta["lwharf"]),
@@ -987,10 +992,16 @@ def voyage_dashboard(meta, rows):
     return page(f"Storage {meta['vsl']} {meta['voy']}", hdr, kpis + warns + links + stay_chart + days_html + table)
 
 
+def app_button():
+    return (f'<a class="appbtn" href="{APP_URL}" target="_blank" rel="noopener" '
+            f'title="เปิดแอพคำนวณ / Export ไฟล์ STORAGE TEMPLATE / Dashboard ที่แก้ได้">เปิด HAL Storage Calculator ↗</a>')
+
+
 def master_dashboard(voyages):
     allc = [c for v in voyages for c in v["rows"]]
     s = summarize(allc)
-    hdr = (f'<h1>HAL <b>Storage</b> Dashboard</h1><p>รวมทุกเที่ยวเรือที่คำนวณแล้ว · {len(voyages)} เที่ยว</p>')
+    hdr = (f'<div class="head-row"><div><h1>HAL <b>Storage</b> Dashboard</h1>'
+           f'<p>รวมทุกเที่ยวเรือที่คำนวณแล้ว · {len(voyages)} เที่ยว</p></div>{app_button()}</div>')
     tiles = '<div class="kpis">'
     for a in ("BKK", "UTCT", "LCH"):
         t = summarize([c for v in voyages if v["meta"]["area"] == a for c in v["rows"]])
@@ -1318,6 +1329,17 @@ if __name__ == "__main__":
         for f in import_app_raw(sys.argv[2]):
             print("INPUT:", os.path.basename(f))
         sys.exit(main())
+    if len(sys.argv) > 1 and sys.argv[1] == "--dashboards":
+        # python storage_calc.py --dashboards → สร้างหน้า dashboard ของทุกเที่ยวและหน้ารวมใหม่ (ไม่คำนวณซ้ำ)
+        vs = load_voyages()
+        for v in vs:
+            m = v["meta"]
+            with open(os.path.join(VOY_DIR, m["name"], f"{m['name']}_DASHBOARD.html"), "w", encoding="utf-8") as fh:
+                fh.write(voyage_dashboard(m, [dict(c) for c in v["rows"]]))
+        with open(MASTER_DASH, "w", encoding="utf-8") as fh:
+            fh.write(master_dashboard(vs))
+        print(f"สร้าง dashboard ใหม่ {len(vs)} เที่ยว + หน้ารวม")
+        sys.exit(0)
     if len(sys.argv) > 1 and sys.argv[1] == "--template-js":
         print(write_template_js())
         sys.exit(0)

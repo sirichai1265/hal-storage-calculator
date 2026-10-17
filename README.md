@@ -19,6 +19,8 @@
 
 อัปเดต Dashboard ออนไลน์: วางไฟล์ใน `INPUT/` แล้วดับเบิลคลิก `update_dashboard.bat` (คำนวณ + push ขึ้น GitHub)
 
+ปุ่ม "เปิด HAL Storage Calculator ↗" ที่หัวทุกหน้า dashboard ใช้ลิงก์ `APP_URL` ใน `storage_calc.py` · สร้างหน้า dashboard ทุกเที่ยวใหม่โดยไม่คำนวณซ้ำ: `python storage_calc.py --dashboards`
+
 ## ติดตั้ง
 
 ```bash
