@@ -43,6 +43,33 @@
     if (data.every(mine)) return (s.raw && s.raw[kind]) || rows;
     return data.filter(r => mine(r) && (kind !== "loading" || r[10] === "F"));
   }
+  // ตู้ซ้ำใน GATE → ใช้แถวที่ GateDate ล่าสุด (ตรงกับ pick_gate/gate_first ใน storage_calc.py และ pickGate ใน storage_app.html)
+  function gDay(v) {
+    if (v == null || v === "") return "";
+    if (typeof v === "number") return new Date(Math.round((Math.floor(v) - 25569) * 864e5)).toISOString().slice(0, 10);
+    if (v instanceof Date) return new Date(Date.UTC(v.getFullYear(), v.getMonth(), v.getDate())).toISOString().slice(0, 10);
+    const t = String(v).trim();
+    let m = t.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/); if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+    m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    return "";
+  }
+  const gNewer = (a, b) => { const x = gDay(a[3]) + "|" + String(a[4] == null ? "" : a[4]), y = gDay(b[3]) + "|" + String(b[4] == null ? "" : b[4]); return x > y; };
+  function pickGate(gl, bkno) {
+    let cand = gl.filter(x => x[12] === bkno); if (!cand.length) cand = gl;
+    let best = null; cand.forEach(x => { if (!best || gNewer(x, best)) best = x; }); return best;
+  }
+  // สูตร VLOOKUP หยิบแถวแรกของตู้ → ย้ายแถวที่ใช้คำนวณขึ้นก่อน (สลับเฉพาะตำแหน่งแถวข้อมูลของตู้นั้น แถวท้ายไฟล์ไม่ขยับ)
+  function gateFirst(gate, bkOf) {
+    const pos = {};
+    gate.forEach((r, i) => { if (KEYRE.gate.test(String(r && r[0] == null ? "" : r[0]).trim())) (pos[r[0]] ||= []).push(i); });
+    const out = gate.slice();
+    Object.keys(pos).forEach(c => {
+      const idx = pos[c]; if (idx.length < 2 || !(c in bkOf)) return;
+      const best = pickGate(idx.map(i => gate[i]), bkOf[c]);
+      [best, ...idx.map(i => gate[i]).filter(r => r !== best)].forEach((r, k) => { out[idx[k]] = r; });
+    });
+    return out;
+  }
   function pick(sources, kind, keys, fallback, vkey) {
     const out = [];
     (sources || []).forEach(s => out.push(...rawFor(s, kind, keys, vkey)));
@@ -124,7 +151,8 @@
 
     putRaw(wb.getWorksheet("1.Loading"), pick(sources, "loading", cntrs, uniq(rows.map(r => r._r))), 29);
     putRaw(wb.getWorksheet("2.Bookinglist"), pick(sources, "booking", bks, uniq(rows.map(r => r._b)), vkey), 103);
-    putRaw(wb.getWorksheet("3.GateMove"), pick(sources, "gate", pairs, uniq(rows.map(r => r._g))), 37);
+    const bkOf = {}; rows.forEach(r => { bkOf[r.cntr] = r.bkno; });
+    putRaw(wb.getWorksheet("3.GateMove"), gateFirst(pick(sources, "gate", pairs, uniq(rows.map(r => r._g))), bkOf), 37);
 
     const ws = wb.getWorksheet("CS");
     const p = ws.getRow(3), h = p.height;

@@ -284,6 +284,17 @@ def load_corrections():
     return out
 
 
+def gate_key(r):
+    """ลำดับความใหม่ของแถว GATE: GateDate แล้วตามด้วย GateTime"""
+    return (str(to_date(r[3]) or ""), str(r[4] or ""))
+
+
+def pick_gate(gl, bkno):
+    """ตู้ซ้ำใน GATE → ใช้แถวที่ GateDate ล่าสุด (ถ้ามีแถวที่ booking ตรงกัน เลือกจากแถวเหล่านั้นก่อน)"""
+    cand = [x for x in gl if x[12] == bkno] or gl
+    return max(cand, key=gate_key) if cand else None
+
+
 def compute(sources):
     corrections = load_corrections()
     bk, gates = {}, defaultdict(list)
@@ -307,7 +318,10 @@ def compute(sources):
             if bsi is None:
                 warnings.append(f"{cntr}: ไม่พบ Booking {bkno}")
             gl = gates.get(cntr, [])
-            g, gsi = next(((x, i) for x, i in gl if x[12] == bkno), gl[0] if gl else (None, None))
+            g, gsi = None, None
+            if gl:
+                g = pick_gate([x for x, _ in gl], bkno)
+                gsi = next(i for x, i in gl if x is g)
             if g is None:
                 warnings.append(f"{cntr}: ไม่พบวันตู้เข้าในไฟล์ Gate move")
             m = s["manual"].get(cntr, {})
@@ -694,6 +708,8 @@ def write_template_xlsx(path, rows, sources=None):
                 if r is not None and len(r) and id(r) not in seen:
                     seen.add(id(r))
                     out.append(r)
+        if kind == "gate":
+            out = gate_first(out, {x["cs"]["Container No."]: x["cs"]["Booking No."] for x in rows})
         return out
 
     def copy_style(dst, src):
@@ -1158,6 +1174,25 @@ def voyage_raw(rows, sources):
         for s in sources:
             data.extend(raw_for(s, kind, keys[kind], vkey))
         out[kind] = data
+    out["gate"] = gate_first(out["gate"], {x["cs"]["Container No."]: x["cs"]["Booking No."] for x in rows})
+    return out
+
+
+def gate_first(gate, bk_of):
+    """ชีท 3.GateMove: สูตร VLOOKUP หยิบแถวแรกของตู้ → ย้ายแถวที่ใช้คำนวณ (GateDate ล่าสุด) ขึ้นก่อนแถวอื่นของตู้เดียวกัน
+    (สลับกันเฉพาะตำแหน่งแถวข้อมูลของตู้นั้น แถวสรุปท้ายไฟล์ไม่ขยับ)"""
+    pos = defaultdict(list)
+    for i, r in enumerate(gate):
+        if _KEY_RE["gate"].match(str(r[0] or "").strip()):
+            pos[r[0]].append(i)
+    out = list(gate)
+    for c, idx in pos.items():
+        if len(idx) < 2 or c not in bk_of:
+            continue
+        best = pick_gate([gate[i] for i in idx], bk_of[c])
+        rest = [gate[i] for i in idx if gate[i] is not best]
+        for i, r in zip(idx, [best] + rest):
+            out[i] = r
     return out
 
 

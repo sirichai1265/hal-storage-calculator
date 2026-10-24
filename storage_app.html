@@ -415,6 +415,18 @@ function toDay(v){
   m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(m) return Date.UTC(+m[3],m[2]-1,+m[1])/DAY;
   return null;
 }
+// ตู้ซ้ำใน GATE → ใช้แถวที่ GateDate ล่าสุด (ถ้ามีแถวที่ booking ตรงกัน เลือกจากแถวเหล่านั้นก่อน) · ตรงกับ pick_gate ใน storage_calc.py
+function gateNewer(a,b){ const da=toDay(a[3]),db=toDay(b[3]); if(da!==db) return (da??-1e9)>(db??-1e9); return String(a[4]==null?"":a[4])>String(b[4]==null?"":b[4]); }
+function pickGate(gl,bkno){ let cand=gl.filter(x=>x[12]===bkno); if(!cand.length) cand=gl; let best=null; cand.forEach(x=>{ if(!best||gateNewer(x,best)) best=x; }); return best; }
+// ชีท GATE ของเที่ยว: สูตร VLOOKUP หยิบแถวแรกของตู้ → ย้ายแถวที่ใช้คำนวณขึ้นก่อน (สลับเฉพาะตำแหน่งแถวข้อมูลของตู้นั้น) · ตรงกับ gate_first ใน storage_calc.py
+function gateFirst(gate,bkOf){
+  const pos={}; gate.forEach((r,i)=>{ if(/^[A-Z]{4}\d{7}$/.test(String(r&&r[0]!=null?r[0]:"").trim())) (pos[r[0]] ||= []).push(i); });
+  const out=gate.slice();
+  Object.keys(pos).forEach(c=>{ const idx=pos[c]; if(idx.length<2||!(c in bkOf)) return;
+    const best=pickGate(idx.map(i=>gate[i]),bkOf[c]);
+    [best,...idx.map(i=>gate[i]).filter(r=>r!==best)].forEach((r,k)=>{ out[idx[k]]=r; }); });
+  return out;
+}
 function fmtDay(n, short){ if(n==null) return "–"; const d=new Date(n*DAY);
   const dd=String(d.getUTCDate()).padStart(2,"0"), mm=String(d.getUTCMonth()+1).padStart(2,"0");
   return short ? `${dd}/${mm}` : `${dd}/${mm}/${d.getUTCFullYear()}`; }
@@ -608,7 +620,7 @@ function recompute(){
       const fx=FIXES.get(`${String(cntr).toUpperCase()}|${String(bkno||"").toUpperCase()}`);   // CORRECTIONS
       if(fx&&fx.loc&&fx.loc!==loc){ fixNote=`แก้ Location ${loc} → ${fx.loc} (CORRECTIONS.csv${fx.remark?": "+fx.remark:""})`; loc=fx.loc; }
       const b=bk[bkno]||[]; if(hasBkg&&!bk[bkno]) WARNINGS.push(`${cntr}: ไม่พบ Booking ${bkno}`);
-      const gl=gates[cntr]||[], g=gl.find(x=>x[12]===bkno)||gl[0];
+      const gl=gates[cntr]||[], g=pickGate(gl,bkno);
       if(hasGate&&!g) WARNINGS.push(`${cntr}: ไม่พบวันตู้เข้าในไฟล์ Gate move`);
       const m=s.manual[cntr]||{};
       const dg=![null,undefined,"",0,"0"].includes(b[42]), rf=tpsz.endsWith("RE");
@@ -1105,6 +1117,7 @@ function voyageRaw(set){
   const keys={loading:cntrs,gate:pairs,booking:bks}, out={};
   RAW_KINDS.forEach(k=>{ const rows=[];
     SOURCES.forEach(s=>rows.push(...rawForVoyage(s,k,keys[k],vkey)));
+    if(k==="gate"){ const bkOf={}; set.rows.forEach(r=>{ bkOf[r.cntr]=r.bkno; }); rows.splice(0,rows.length,...gateFirst(rows,bkOf)); }
     out[k]=rows.map(r=>{ const a=Array.from(r||[],jsonCell); while(a.length&&(a[a.length-1]==null||a[a.length-1]==="")) a.pop(); return a; });
   });
   return out;
@@ -1124,7 +1137,7 @@ function setFromDoc(v,raw){
   const etd=v.meta.etd?dayFromISO(v.meta.etd):null;
   const rows=(v.rows||[]).map(d=>{
     const ld=raw.loading.find(r=>r[0]===d.cntr&&r[10]==="F")||null;
-    const gl=raw.gate.filter(g=>g[0]===d.cntr), g=gl.find(x=>x[12]===d.bkno)||gl[0]||null;
+    const gl=raw.gate.filter(g=>g[0]===d.cntr), g=pickGate(gl,d.bkno)||null;
     const b=bk[d.bkno]||[], dg=!!d.dg;
     const rule=ftTerminal(d.loc,dg,b[84]);
     const charge=d.charge||0, hal=d.hal??charge;
