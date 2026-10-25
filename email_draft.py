@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-"""สร้าง/อัปเดตดราฟอีเมล์ Outlook ของเที่ยวเรือ (ไม่ส่ง) — แนบ _TEMPLATE.xlsx + แปะ Full Schedule จาก e-heunga.com (ETA/ETB/ETD)
+"""สร้าง/อัปเดตดราฟอีเมล์ Outlook ของเที่ยวเรือ (ไม่ส่ง) — แนบไฟล์ _TEMPLATE.xlsx (ตั้งชื่อไฟล์แนบเป็น <เที่ยว>.xlsx) + แปะ Full Schedule จาก e-heunga.com (ETA/ETB/ETD)
 ใช้:  python email_draft.py <ชื่อเที่ยว>   เช่น  python email_draft.py 2026-10-22_KST_SWAL_2609N_THBKK_BKK02
 """
 import glob
 import html
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -105,7 +106,11 @@ def main(name):
     subject = f"{svc} / FULL STORAGE / {vsl} {voy} / {pol}"
     tmp = os.path.join(tempfile.gettempdir(), "storage_mail.html")
     open(tmp, "w", encoding="utf-8").write(h)
-    att = os.path.join(sc.VOY_DIR, name, f"{name}_TEMPLATE.xlsx")
+    src = os.path.join(sc.VOY_DIR, name, f"{name}_TEMPLATE.xlsx")
+    attdir = os.path.join(tempfile.gettempdir(), "storage_mail_att")                  # ไฟล์แนบตั้งชื่อ <เที่ยว>.xlsx (ไม่มี _TEMPLATE)
+    os.makedirs(attdir, exist_ok=True)
+    att = os.path.join(attdir, f"{name}.xlsx")
+    shutil.copyfile(src, att)
     ps = os.path.join(BASE, "draft_outlook.ps1")
     out = subprocess.run(["powershell", "-NoProfile", "-File", ps, "-Html", tmp, "-Attach", att, "-Sub", subject, "-To", TO],
                          capture_output=True, text=True, encoding="utf-8", errors="replace")

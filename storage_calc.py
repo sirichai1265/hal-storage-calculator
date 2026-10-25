@@ -774,8 +774,7 @@ def write_template_xlsx(path, rows, sources=None):
             elif col == "Y" and ft_fixed:
                 cell.value = c["Normal F/T Terminal"]
             elif col == "W" and x.get("din_fixed"):         # DG LCH วันตู้เข้า = ETD (ไม่มีแถว GATE ให้สูตรหา) → ใส่เป็นค่า
-                cell.value = c["Date In"]
-                cell.number_format = FMT_DATE
+                cell.value = str(c["Date In"])[:10]            # ข้อความ YYYY-MM-DD เหมือนค่าที่ VLOOKUP ดึงจาก GATE
             elif isinstance(p.value, str) and p.value.startswith("="):
                 cell.value = Translator(p.value, origin=f"{col}3").translate_formula(f"{col}{i}")
                 if col in vals:

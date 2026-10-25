@@ -169,7 +169,7 @@
         if (j === 0) cell.value = r.cntr;
         else if (col === "C" && locFixed) cell.value = r.loc;
         else if (col === "Y" && ftFixed) cell.value = r.ft;
-        else if (col === "W" && r.dinFixed) cell.value = new Date(r.etd * 864e5);   // DG LCH วันตู้เข้า = ETD (ไม่มีแถว GATE ให้สูตรหา) → ใส่เป็นค่า
+        else if (col === "W" && r.dinFixed) cell.value = new Date(r.etd * 864e5).toISOString().slice(0, 10);   // DG LCH วันตู้เข้า = ETD (ไม่มีแถว GATE ให้สูตรหา) → ใส่เป็นค่า
         else if (f) cell.value = { formula: translate(f, rr), result: cv[col] !== undefined ? cv[col] : undefined };
         else if (manual[col]) {
           const v = manual[col](r);
