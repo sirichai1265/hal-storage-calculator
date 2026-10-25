@@ -65,7 +65,7 @@
     const out = gate.slice();
     Object.keys(pos).forEach(c => {
       const idx = pos[c]; if (idx.length < 2 || !(c in bkOf)) return;
-      const best = pickGate(idx.map(i => gate[i]), bkOf[c]);
+      const gi = bkOf[c], best = pickGate(gi.dgl ? idx.map(i => gate[i]).filter(x => x[0] === gi.lw) : idx.map(i => gate[i]), gi.bk); if (!best) return;
       [best, ...idx.map(i => gate[i]).filter(r => r !== best)].forEach((r, k) => { out[idx[k]] = r; });
     });
     return out;
@@ -151,7 +151,7 @@
 
     putRaw(wb.getWorksheet("1.Loading"), pick(sources, "loading", cntrs, uniq(rows.map(r => r._r))), 29);
     putRaw(wb.getWorksheet("2.Bookinglist"), pick(sources, "booking", bks, uniq(rows.map(r => r._b)), vkey), 103);
-    const bkOf = {}; rows.forEach(r => { bkOf[r.cntr] = r.bkno; });
+    const bkOf = {}; rows.forEach(r => { bkOf[r.cntr] = { bk: r.bkno, lw: r.lwharf, dgl: !!r.dg && r.pol === "THLCH" }; });
     putRaw(wb.getWorksheet("3.GateMove"), gateFirst(pick(sources, "gate", pairs, uniq(rows.map(r => r._g))), bkOf), 37);
 
     const ws = wb.getWorksheet("CS");
@@ -169,11 +169,12 @@
         if (j === 0) cell.value = r.cntr;
         else if (col === "C" && locFixed) cell.value = r.loc;
         else if (col === "Y" && ftFixed) cell.value = r.ft;
+        else if (col === "W" && r.dinFixed) cell.value = new Date(r.etd * 864e5);   // DG LCH วันตู้เข้า = ETD (ไม่มีแถว GATE ให้สูตรหา) → ใส่เป็นค่า
         else if (f) cell.value = { formula: translate(f, rr), result: cv[col] !== undefined ? cv[col] : undefined };
         else if (manual[col]) {
           const v = manual[col](r);
           cell.value = (col === "S" || col === "V") ? (v == null ? null : new Date(v * 864e5)) : blank(v);
-        } else if (col === "AJ") cell.value = (ftFixed || locFixed) ? (r.fixNote || `F/T แก้ในแอพ (เดิม ${r.ftDefault})`) : null;
+        } else if (col === "AJ") cell.value = (ftFixed || locFixed || r.dinFixed) ? (r.fixNote || `F/T แก้ในแอพ (เดิม ${r.ftDefault})`) : null;
         else cell.value = null;
       });
       if (h) xr.height = h;

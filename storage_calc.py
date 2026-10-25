@@ -289,6 +289,16 @@ def gate_key(r):
     return (str(to_date(r[3]) or ""), str(r[4] or ""))
 
 
+def choose_gate(gl, bkno, lw, dg_lch):
+    """แถว GATE ที่ใช้เป็นวันตู้เข้า · ตู้ DG ที่ POL = THLCH: ใช้เฉพาะแถวที่ Location ตรงกับ LWharf
+    ถ้าไม่มีแถวไหนตรง (หรือไม่มี GATE เลย) → None = ใช้ ETD เป็นวันตู้เข้า"""
+    if dg_lch:
+        gl = [x for x in gl if x[0] == lw]
+        if not gl:
+            return None
+    return pick_gate(gl, bkno)
+
+
 def pick_gate(gl, bkno):
     """ตู้ซ้ำใน GATE → ใช้แถวที่ GateDate ล่าสุด (ถ้ามีแถวที่ booking ตรงกัน เลือกจากแถวเหล่านั้นก่อน)"""
     cand = [x for x in gl if x[12] == bkno] or gl
@@ -318,11 +328,17 @@ def compute(sources):
             if bsi is None:
                 warnings.append(f"{cntr}: ไม่พบ Booking {bkno}")
             gl = gates.get(cntr, [])
-            g, gsi = None, None
+            is_dg = b[42] not in (None, "", 0, "0")
+            lw = b[15] or r[27] or loc
+            dg_lch = is_dg and (b[14] or r[7]) == "THLCH"
+            g, gsi, din_fixed = None, None, False
             if gl:
-                g = pick_gate([x for x, _ in gl], bkno)
-                gsi = next(i for x, i in gl if x is g)
-            if g is None:
+                g = choose_gate([x for x, _ in gl], bkno, lw, dg_lch)
+                gsi = next((i for x, i in gl if x is g), None)
+            if dg_lch and g is None:                       # DG LCH: GATE ไม่ตรง LWharf (หรือไม่มี) → วันตู้เข้า = ETD
+                din_fixed = True
+                locs = "/".join(sorted({str(x[0]) for x, _ in gl})) or "ไม่มี"
+            elif g is None:
                 warnings.append(f"{cntr}: ไม่พบวันตู้เข้าในไฟล์ Gate move")
             m = s["manual"].get(cntr, {})
             fix_note = None
@@ -332,12 +348,13 @@ def compute(sources):
                 loc = fix["Location"]
 
             group = GROUP_OF_LOC.get(loc, "G2")
-            is_dg = b[42] not in (None, "", 0, "0")
             is_rf = tpsz.endswith("RE")
             size = "20'" if tpsz.startswith("22") else "40'"
             svc = b[11] or r[19]
             etd = to_date(r[1])
-            din = to_date(g[3]) if g else None
+            din = etd if din_fixed else (to_date(g[3]) if g else None)
+            if din_fixed:
+                note_din = f"DG LCH: Location ใน GATE ({locs}) ไม่ตรง LWharf {lw} ใช้ ETD เป็นวันตู้เข้า"
             stay = (etd - din).days + 1 if etd and din else None
             ft = ft_terminal(loc, is_dg, b[84])
             note = "CFS/CY ที่ PAT: F/T 0 วัน" if (ft == 0 and loc in CFS_ZERO_FT_LOCS) else None
@@ -369,12 +386,12 @@ def compute(sources):
                 "Total Storage Charge": charge, "Special F/T": sp_ft or None, "HQ Ref No. / TML / APP BY": tml or None,
                 "Free Time Customer": cft, "คืนก่อนเรือออก": (etd - allow).days + 1 if (etd and allow) else None,
                 "Over F/T Customer": over_c, "Amount due to Customer": cust, "Collection": collect or None,
-                "Amount due to HAL": charge - collect, "Remark": " · ".join(x for x in (m.get("remark"), note, fix_note) if x) or None, "SALESNM": b[39],
+                "Amount due to HAL": charge - collect, "Remark": " · ".join(x for x in (m.get("remark"), note, fix_note, note_din if din_fixed else None) if x) or None, "SALESNM": b[39],
                 "CUST ETD": to_date(b[100]), "PICK UP": b[62], "COMMON REMARKS": b[51], "ROLL": b[102],
             }
             key = (etd, svc, b[12] or r[2], b[13] or r[3], b[14] or r[7], b[15] or r[27] or loc)
             rows.append({"cs": cs, "key": key, "area": area_of(loc), "load": r, "bkg": b if bsi is not None else None,
-                         "gate": g, "srcs": {si, bsi, gsi} - {None}})
+                         "gate": g, "din_fixed": din_fixed, "srcs": {si, bsi, gsi} - {None}})
     return rows, warnings, heads
 
 
@@ -709,7 +726,7 @@ def write_template_xlsx(path, rows, sources=None):
                     seen.add(id(r))
                     out.append(r)
         if kind == "gate":
-            out = gate_first(out, {x["cs"]["Container No."]: x["cs"]["Booking No."] for x in rows})
+            out = gate_first(out, gate_info(rows))
         return out
 
     def copy_style(dst, src):
@@ -756,6 +773,9 @@ def write_template_xlsx(path, rows, sources=None):
                 cell.value = c["Location"]
             elif col == "Y" and ft_fixed:
                 cell.value = c["Normal F/T Terminal"]
+            elif col == "W" and x.get("din_fixed"):         # DG LCH วันตู้เข้า = ETD (ไม่มีแถว GATE ให้สูตรหา) → ใส่เป็นค่า
+                cell.value = c["Date In"]
+                cell.number_format = FMT_DATE
             elif isinstance(p.value, str) and p.value.startswith("="):
                 cell.value = Translator(p.value, origin=f"{col}3").translate_formula(f"{col}{i}")
                 if col in vals:
@@ -763,7 +783,7 @@ def write_template_xlsx(path, rows, sources=None):
             elif col in manual_col:
                 v = c.get(manual_col[col])
                 if col == "AJ":                                  # หมายเหตุเฉพาะตู้ที่แก้ค่าเอง
-                    v = c.get("Remark") if (loc_fixed or ft_fixed) else None
+                    v = c.get("Remark") if (loc_fixed or ft_fixed or x.get("din_fixed")) else None
                 cell.value = v
                 if isinstance(v, (date, datetime)):
                     cell.number_format = FMT_DATE
@@ -1174,8 +1194,12 @@ def voyage_raw(rows, sources):
         for s in sources:
             data.extend(raw_for(s, kind, keys[kind], vkey))
         out[kind] = data
-    out["gate"] = gate_first(out["gate"], {x["cs"]["Container No."]: x["cs"]["Booking No."] for x in rows})
+    out["gate"] = gate_first(out["gate"], gate_info(rows))
     return out
+
+
+def gate_info(rows):
+    return {x["cs"]["Container No."]: (x["cs"]["Booking No."], x["key"][5], bool(x["cs"]["DG"]) and x["cs"]["POL"] == "THLCH") for x in rows}
 
 
 def gate_first(gate, bk_of):
@@ -1189,7 +1213,10 @@ def gate_first(gate, bk_of):
     for c, idx in pos.items():
         if len(idx) < 2 or c not in bk_of:
             continue
-        best = pick_gate([gate[i] for i in idx], bk_of[c])
+        bkno, lw, dgl = bk_of[c]
+        best = choose_gate([gate[i] for i in idx], bkno, lw, dgl)
+        if best is None:
+            continue
         rest = [gate[i] for i in idx if gate[i] is not best]
         for i, r in zip(idx, [best] + rest):
             out[i] = r

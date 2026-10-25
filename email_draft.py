@@ -72,11 +72,13 @@ def main(name):
     meta = json.load(open(os.path.join(sc.VOY_DIR, name, "data.json"), encoding="utf-8"))["meta"]
     vsl, voy, pol, svc = meta["vsl"], meta["voy"], meta["pol"], meta["svc"]
     bkg = glob.glob(os.path.join(sc.VOY_DIR, name, "SOURCE", "*BKG*.xls*"))
-    ports = set()
+    ports, soc = set(), []
     for f in bkg:
         for r in sc.classify(f)["booking"]:
             if str(r[0]).startswith("HASLS") and (r[12], r[13], r[14]) == (vsl, voy, pol):
                 ports.add(r[18])
+                if str(r[10] or "").strip().upper() in ("Y", "SOC"):          # หัว SOC = Y / SOC → แปะตาม SOC FORM
+                    soc.append(r)
                 if r[25]:
                     ports.add(r[25])
                 svc = r[11] or svc
@@ -88,11 +90,18 @@ def main(name):
         b = ' style="background:#FFF2CC"' if r["PORT"] == pol and r["VYG"] == voy else ""
         body += (f'<tr{b}><td style="{ST}">{r["VYG"]}</td><td style="{ST}">{r["PORT"]}</td><td style="{ST}">{html.escape(r["WHARFNM"])}</td>'
                  f'<td style="{ST}">{fmt(r["ETA"])}</td><td style="{ST}">{fmt(r["ETB"])}</td><td style="{ST}">{fmt(r["ETD"])}</td></tr>')
+    soc_html = ""
+    if soc:
+        cols = [("B/K No", 0), ("Cntr Type & Size", 1), ("SOC", 10), ("SVC", 11), ("VSL", 12), ("VOY", 13), ("POL", 14),
+                ("POD", 18), ("TS PORT", 25), ("Shipper", 26), ("Org Shipper", 27)]           # คอลัมน์ตาม SOC FORM.xls
+        soc_html = (f'<p><b>SOC</b></p><table style="border-collapse:collapse"><tr>' + "".join(f"<th {TH}>{n}</th>" for n, _ in cols) + "</tr>"
+                    + "".join("<tr>" + "".join(f'<td style="{ST}">{html.escape(str(r[i] if r[i] is not None else ""))}</td>' for _, i in cols) + "</tr>"
+                               for r in sorted(soc, key=lambda r: str(r[0]))) + "</table>")
     h = ('<div style="font-family:Tahoma;font-size:11px"><p>Dear all,</p>'
          '<p>Please find attached the full storage calculation for the vessel below.</p>'
          f'<p><b>Schedule</b> &nbsp; {svc} / {seq[0]["VSLNM"]} ({vsl}) {voy}</p>'
          f'<table style="border-collapse:collapse"><tr><th {TH}>Voyage</th><th {TH}>Port</th><th {TH}>Terminal</th>'
-         f'<th {TH}>ETA</th><th {TH}>ETB</th><th {TH}>ETD</th></tr>{body}</table></div>')
+         f'<th {TH}>ETA</th><th {TH}>ETB</th><th {TH}>ETD</th></tr>{body}</table>{soc_html}</div>')
     subject = f"{svc} / FULL STORAGE / {vsl} {voy} / {pol}"
     tmp = os.path.join(tempfile.gettempdir(), "storage_mail.html")
     open(tmp, "w", encoding="utf-8").write(h)
@@ -101,6 +110,7 @@ def main(name):
     out = subprocess.run(["powershell", "-NoProfile", "-File", ps, "-Html", tmp, "-Attach", att, "-Sub", subject, "-To", TO],
                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     print(out.stdout.strip() or out.stderr.strip())
+    print("  SOC bookings:", len(soc))
     for r in seq:
         print(" ", r["VYG"], r["PORT"], fmt(r["ETA"]), fmt(r["ETB"]), fmt(r["ETD"]))
 
