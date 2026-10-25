@@ -293,7 +293,7 @@ def choose_gate(gl, bkno, lw, dg_lch):
     """แถว GATE ที่ใช้เป็นวันตู้เข้า · ตู้ DG ที่ POL = THLCH: ใช้เฉพาะแถวที่ Location ตรงกับ LWharf
     ถ้าไม่มีแถวไหนตรง (หรือไม่มี GATE เลย) → None = ใช้ ETD เป็นวันตู้เข้า"""
     if dg_lch:
-        gl = [x for x in gl if x[0] == lw]
+        gl = [x for x in gl if x[1] == lw]
         if not gl:
             return None
     return pick_gate(gl, bkno)
@@ -337,7 +337,7 @@ def compute(sources):
                 gsi = next((i for x, i in gl if x is g), None)
             if dg_lch and g is None:                       # DG LCH: GATE ไม่ตรง LWharf (หรือไม่มี) → วันตู้เข้า = ETD
                 din_fixed = True
-                locs = "/".join(sorted({str(x[0]) for x, _ in gl})) or "ไม่มี"
+                locs = "/".join(sorted({str(x[1]) for x, _ in gl})) or "ไม่มี"
             elif g is None:
                 warnings.append(f"{cntr}: ไม่พบวันตู้เข้าในไฟล์ Gate move")
             m = s["manual"].get(cntr, {})

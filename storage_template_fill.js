@@ -65,7 +65,7 @@
     const out = gate.slice();
     Object.keys(pos).forEach(c => {
       const idx = pos[c]; if (idx.length < 2 || !(c in bkOf)) return;
-      const gi = bkOf[c], best = pickGate(gi.dgl ? idx.map(i => gate[i]).filter(x => x[0] === gi.lw) : idx.map(i => gate[i]), gi.bk); if (!best) return;
+      const gi = bkOf[c], best = pickGate(gi.dgl ? idx.map(i => gate[i]).filter(x => x[1] === gi.lw) : idx.map(i => gate[i]), gi.bk); if (!best) return;
       [best, ...idx.map(i => gate[i]).filter(r => r !== best)].forEach((r, k) => { out[idx[k]] = r; });
     });
     return out;

@@ -423,7 +423,7 @@ function gateFirst(gate,bkOf){
   const pos={}; gate.forEach((r,i)=>{ if(/^[A-Z]{4}\d{7}$/.test(String(r&&r[0]!=null?r[0]:"").trim())) (pos[r[0]] ||= []).push(i); });
   const out=gate.slice();
   Object.keys(pos).forEach(c=>{ const idx=pos[c]; if(idx.length<2||!(c in bkOf)) return;
-    const gi=bkOf[c], best=pickGate(gi.dgl?idx.map(i=>gate[i]).filter(x=>x[0]===gi.lw):idx.map(i=>gate[i]),gi.bk); if(!best) return;
+    const gi=bkOf[c], best=pickGate(gi.dgl?idx.map(i=>gate[i]).filter(x=>x[1]===gi.lw):idx.map(i=>gate[i]),gi.bk); if(!best) return;
     [best,...idx.map(i=>gate[i]).filter(r=>r!==best)].forEach((r,k)=>{ out[idx[k]]=r; }); });
   return out;
 }
@@ -621,14 +621,14 @@ function recompute(){
       if(fx&&fx.loc&&fx.loc!==loc){ fixNote=`แก้ Location ${loc} → ${fx.loc} (CORRECTIONS.csv${fx.remark?": "+fx.remark:""})`; loc=fx.loc; }
       const b=bk[bkno]||[]; if(hasBkg&&!bk[bkno]) WARNINGS.push(`${cntr}: ไม่พบ Booking ${bkno}`);
       const dg=![null,undefined,"",0,"0"].includes(b[42]), lwh=b[15]||r[27]||loc, dgLch=dg&&(b[14]||r[7])==="THLCH";
-      const gl=gates[cntr]||[], g=pickGate(dgLch?gl.filter(x=>x[0]===lwh):gl,bkno);   // DG LCH: ใช้เฉพาะแถว GATE ที่ Location ตรง LWharf
+      const gl=gates[cntr]||[], g=pickGate(dgLch?gl.filter(x=>x[1]===lwh):gl,bkno);   // DG LCH: ใช้เฉพาะแถว GATE ที่ Location ตรง LWharf
       const dinFixed=dgLch&&!g;                                                       // ไม่ตรง/ไม่มี → วันตู้เข้า = ETD
       if(hasGate&&!g&&!dinFixed) WARNINGS.push(`${cntr}: ไม่พบวันตู้เข้าในไฟล์ Gate move`);
       const m=s.manual[cntr]||{};
       const rf=tpsz.endsWith("RE");
       const size=tpsz.startsWith("22")?"20'":"40'", svc=b[11];
       const etd=toDay(r[1]), din=dinFixed?etd:(g?toDay(g[3]):null);
-      const dinNote=dinFixed?`DG LCH: Location ใน GATE (${[...new Set(gl.map(x=>x[0]))].sort().join("/")||"ไม่มี"}) ไม่ตรง LWharf ${lwh} ใช้ ETD เป็นวันตู้เข้า`:"";
+      const dinNote=dinFixed?`DG LCH: Location ใน GATE (${[...new Set(gl.map(x=>x[1]))].sort().join("/")||"ไม่มี"}) ไม่ตรง LWharf ${lwh} ใช้ ETD เป็นวันตู้เข้า`:"";
       let ftDefault=ftTerminal(loc,dg,b[84]), ftNote=(ftDefault===0&&CFS_ZERO_FT_LOCS.includes(loc))?"CFS/CY ที่ PAT: F/T 0 วัน":"";
       if(m.ftOverride!=null&&m.ftOverride!==ftDefault){ WARNINGS.push(`${cntr}: ใช้ F/T = ${m.ftOverride} วัน ตามที่กรอกเองในชีท CS (กฎให้ ${ftDefault} วัน)`); ftDefault=m.ftOverride; ftNote="กรอกเองในชีท CS"; }
       if(m.tml&&m.tml.toUpperCase()==="TML"&&m.spft>0){ ftDefault=m.spft; ftNote="Special F/T (TML)"; }
@@ -1141,7 +1141,7 @@ function setFromDoc(v,raw){
   const rows=(v.rows||[]).map(d=>{
     const ld=raw.loading.find(r=>r[0]===d.cntr&&r[10]==="F")||null;
     const dgLch=!!d.dg&&v.meta.pol==="THLCH", dinFixed=/DG LCH: Location ใน GATE/.test(d.remark||"");
-    const gl=raw.gate.filter(g=>g[0]===d.cntr), g=pickGate(dgLch?gl.filter(x=>x[0]===v.meta.lwharf):gl,d.bkno)||null;
+    const gl=raw.gate.filter(g=>g[0]===d.cntr), g=pickGate(dgLch?gl.filter(x=>x[1]===v.meta.lwharf):gl,d.bkno)||null;
     const b=bk[d.bkno]||[], dg=!!d.dg;
     const rule=ftTerminal(d.loc,dg,b[84]);
     const charge=d.charge||0, hal=d.hal??charge;
